@@ -1,5 +1,5 @@
 import type {
-  User, Property, Lead, Activity, Task, Appointment, PipelineStageDef,
+  User, Property, Lead, Activity, Task, Appointment, PipelineStageDef, Tenant, Team,
 } from "./types";
 
 export const PIPELINE_STAGES: PipelineStageDef[] = [
@@ -12,13 +12,44 @@ export const PIPELINE_STAGES: PipelineStageDef[] = [
   { id: "lost", label: "Lost", tone: "bg-destructive/10 text-destructive border-destructive/20" },
 ];
 
-export const USERS: User[] = [
-  { id: "u1", name: "Layla Hassan", email: "layla@propflow.com", role: "admin", avatarColor: "bg-chart-1", initials: "LH" },
-  { id: "u2", name: "Omar Khaled", email: "omar@propflow.com", role: "manager", avatarColor: "bg-chart-2", initials: "OK" },
-  { id: "u3", name: "Nour Adel", email: "nour@propflow.com", role: "agent", avatarColor: "bg-chart-3", initials: "NA" },
-  { id: "u4", name: "Mariam Sayed", email: "mariam@propflow.com", role: "agent", avatarColor: "bg-chart-4", initials: "MS" },
-  { id: "u5", name: "Karim Fouad", email: "karim@propflow.com", role: "agent", avatarColor: "bg-chart-5", initials: "KF" },
+// --- Tenants (multi-tenant SaaS) ---
+export const TENANTS: Tenant[] = [
+  { id: "t1", name: "Acme Realty Group", slug: "acme-realty", plan: "professional", status: "active", createdAt: "2025-08-12T00:00:00Z", seats: 25, leadsCount: 152 },
+  { id: "t2", name: "Skyline Developers", slug: "skyline", plan: "enterprise", status: "active", createdAt: "2025-04-03T00:00:00Z", seats: 100, leadsCount: 1284 },
+  { id: "t3", name: "Coastal Brokers", slug: "coastal", plan: "starter", status: "trial", createdAt: "2026-04-22T00:00:00Z", seats: 5, leadsCount: 18 },
+  { id: "t4", name: "Pyramid Estates", slug: "pyramid", plan: "professional", status: "suspended", createdAt: "2025-11-30T00:00:00Z", seats: 25, leadsCount: 412 },
 ];
+
+// Active tenant for the demo app (single-tenant view)
+export const ACTIVE_TENANT_ID = "t1";
+
+// --- Teams within active tenant ---
+export const TEAMS: Team[] = [
+  { id: "tm1", tenantId: "t1", name: "Residential Sales", leaderId: "u3" },
+  { id: "tm2", tenantId: "t1", name: "Commercial & Investment", leaderId: "u6" },
+];
+
+// --- Users with org roles & team assignments ---
+// Layla = platform owner (super_admin). Omar = Manager (tenant owner).
+// Nour & Karim = Leaders. Mariam, Salma, Hossam = Agents.
+export const USERS: User[] = [
+  { id: "u1", name: "Layla Hassan", email: "layla@propflow.com", role: "super_admin", avatarColor: "bg-chart-1", initials: "LH" },
+  { id: "u2", name: "Omar Khaled", email: "omar@acme-realty.com", role: "manager", avatarColor: "bg-chart-2", initials: "OK", tenantId: "t1" },
+  { id: "u3", name: "Nour Adel", email: "nour@acme-realty.com", role: "manager", avatarColor: "bg-chart-3", initials: "NA", tenantId: "t1", teamId: "tm1" },
+  { id: "u4", name: "Mariam Sayed", email: "mariam@acme-realty.com", role: "agent", avatarColor: "bg-chart-4", initials: "MS", tenantId: "t1", teamId: "tm1" },
+  { id: "u5", name: "Karim Fouad", email: "karim@acme-realty.com", role: "agent", avatarColor: "bg-chart-5", initials: "KF", tenantId: "t1", teamId: "tm1" },
+  { id: "u6", name: "Hossam Reda", email: "hossam@acme-realty.com", role: "manager", avatarColor: "bg-chart-1", initials: "HR", tenantId: "t1", teamId: "tm2" },
+  { id: "u7", name: "Salma Wagdy", email: "salma@acme-realty.com", role: "agent", avatarColor: "bg-chart-2", initials: "SW", tenantId: "t1", teamId: "tm2" },
+];
+
+// OrgRole helper: distinguishes Leader from Manager based on teamId.
+// Manager = role "manager" with no teamId. Leader = role "manager" WITH teamId.
+export function orgRoleOf(u: User): "super_admin" | "manager" | "leader" | "agent" {
+  if (u.role === "super_admin") return "super_admin";
+  if (u.role === "agent") return "agent";
+  if (u.role === "manager" && u.teamId) return "leader";
+  return "manager";
+}
 
 export const CURRENT_USER = USERS[0];
 
