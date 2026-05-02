@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { StageBadge } from "@/components/crm/StageBadge";
 import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";
-import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip, BarChart, Bar, CartesianGrid } from "recharts";
+import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip } from "recharts";
+import { ClientChart } from "@/components/crm/ClientChart";
 import { format } from "date-fns";
 
 export const Route = createFileRoute("/")({
@@ -99,7 +100,7 @@ function Dashboard() {
               </div>
               <span className="text-xs text-muted-foreground">Daily</span>
             </div>
-            <div className="h-56">
+            <ClientChart height={224}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trendData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
                   <defs>
@@ -118,7 +119,7 @@ function Dashboard() {
                   <Area type="monotone" dataKey="won" stroke="var(--chart-2)" strokeWidth={2} fill="url(#g2)" />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+            </ClientChart>
           </Card>
 
           <Card className="p-5 shadow-card">
