@@ -2,6 +2,8 @@ import { Search, Bell, Plus } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { RoleSwitcher } from "./RoleSwitcher";
+import { useRole } from "@/lib/role-context";
 
 export function Topbar() {
   return (
@@ -15,14 +17,23 @@ export function Topbar() {
         />
       </div>
       <div className="ml-auto flex items-center gap-2">
+        <RoleSwitcher />
         <Button size="sm" variant="ghost" className="relative h-9 w-9 p-0">
           <Bell className="h-4 w-4" />
           <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-hot" />
         </Button>
-        <Button size="sm" className="h-9 gap-1.5 bg-gradient-brand text-primary-foreground shadow-sm hover:opacity-95">
-          <Plus className="h-4 w-4" /> New Lead
-        </Button>
+        <NewLeadButton />
       </div>
     </header>
+  );
+}
+
+function NewLeadButton() {
+  const { has } = useRole();
+  if (!has("leads.create")) return null;
+  return (
+    <Button size="sm" className="h-9 gap-1.5 bg-gradient-brand text-primary-foreground shadow-sm hover:opacity-95">
+      <Plus className="h-4 w-4" /> New Lead
+    </Button>
   );
 }
