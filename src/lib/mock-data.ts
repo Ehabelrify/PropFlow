@@ -94,6 +94,7 @@ export const LEADS: Lead[] = NAMES.map((name, i) => {
   const createdDaysAgo = sint(0, 60);
   const lastDaysAgo = Math.min(createdDaysAgo, sint(0, 14));
   const slug = name.toLowerCase().replace(/[^a-z]/g, ".");
+  const owner = spick(USERS.filter(u => u.role === "agent" || (u.role === "manager" && u.teamId)));
   return {
     id: `l${i + 1}`,
     name,
@@ -104,7 +105,9 @@ export const LEADS: Lead[] = NAMES.map((name, i) => {
     score,
     hot: score >= 75 && (stage === "qualified" || stage === "viewing" || stage === "negotiation"),
     budget: sint(2, 30) * 1000000,
-    assignedTo: spick(USERS.filter(u => u.role === "agent" || u.role === "manager")).id,
+    assignedTo: owner.id,
+    tenantId: owner.tenantId ?? ACTIVE_TENANT_ID,
+    teamId: owner.teamId,
     propertyInterest: srand() > 0.3 ? spick(PROPERTIES).id : undefined,
     tags: Array.from(new Set([spick(TAGS), spick(TAGS)])).slice(0, sint(1, 2)),
     createdAt: new Date(now - createdDaysAgo * day).toISOString(),
@@ -187,6 +190,8 @@ export function getUser(id: string) { return USERS.find(u => u.id === id); }
 export function getProperty(id?: string) { return id ? PROPERTIES.find(p => p.id === id) : undefined; }
 export function getLead(id: string) { return LEADS.find(l => l.id === id); }
 export function getStage(id: string) { return PIPELINE_STAGES.find(s => s.id === id); }
+export function getTeam(id?: string) { return id ? TEAMS.find(t => t.id === id) : undefined; }
+export function getTenant(id?: string) { return id ? TENANTS.find(t => t.id === id) : undefined; }
 
 export function formatCurrency(n: number) {
   if (n >= 1_000_000) return `EGP ${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
