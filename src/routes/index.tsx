@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown, Users, Target, Calendar, Flame, ArrowRight, CheckCircle2, Clock } from "lucide-react";
-import { LEADS, TASKS, APPOINTMENTS, ACTIVITIES, formatCurrency, getUser, getLead, PIPELINE_STAGES } from "@/lib/mock-data";
+import { TASKS, APPOINTMENTS, ACTIVITIES, formatCurrency, getUser, getLead, PIPELINE_STAGES } from "@/lib/mock-data";
+import { useRole } from "@/lib/role-context";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,23 +59,27 @@ function KpiCard({
 }
 
 function Dashboard() {
-  const totalLeads = LEADS.length;
-  const hotLeads = LEADS.filter(l => l.hot).length;
-  const wonValue = LEADS.filter(l => l.stage === "won").reduce((s, l) => s + l.budget, 0);
-  const upcoming = APPOINTMENTS.filter(a => a.status === "scheduled").slice(0, 4);
-  const overdueTasks = TASKS.filter(t => t.status !== "done" && new Date(t.dueAt) < new Date());
-  const recentActivity = ACTIVITIES.slice(0, 6);
+  const { user, orgRole, scopedLeads, scopeLabel } = useRole();
+  const leads = scopedLeads;
+  const totalLeads = leads.length;
+  const hotLeads = leads.filter(l => l.hot).length;
+  const wonValue = leads.filter(l => l.stage === "won").reduce((s, l) => s + l.budget, 0);
+  const leadIds = new Set(leads.map(l => l.id));
+  // Filter tasks/appointments/activities to user's scope
+  const upcoming = APPOINTMENTS.filter(a => a.status === "scheduled" && (orgRole === "super_admin" || leadIds.has(a.leadId) || a.assignedTo === user.id)).slice(0, 4);
+  const overdueTasks = TASKS.filter(t => t.status !== "done" && new Date(t.dueAt) < new Date() && (orgRole === "super_admin" || (t.leadId && leadIds.has(t.leadId)) || t.assignedTo === user.id));
+  const recentActivity = ACTIVITIES.filter(a => orgRole === "super_admin" || leadIds.has(a.leadId)).slice(0, 6);
 
   const stageBreakdown = PIPELINE_STAGES.map(s => ({
     ...s,
-    count: LEADS.filter(l => l.stage === s.id).length,
+    count: leads.filter(l => l.stage === s.id).length,
   }));
 
   return (
     <div>
       <PageHeader
-        title="Welcome back, Layla"
-        description="Here's how your team is performing today."
+        title={`Welcome back, ${user.name.split(" ")[0]}`}
+        description={`${scopeLabel} · ${totalLeads} leads in view`}
         actions={
           <>
             <Button variant="outline" size="sm" asChild><Link to="/leads">View leads</Link></Button>
@@ -87,7 +92,7 @@ function Dashboard() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard label="Total leads" value={String(totalLeads)} delta="+12.4%" icon={Users} accent="bg-primary-soft text-primary" />
           <KpiCard label="Hot leads" value={String(hotLeads)} delta="+3" icon={Flame} accent="bg-hot/10 text-hot" />
-          <KpiCard label="Pipeline value" value={formatCurrency(LEADS.reduce((s,l) => s + l.budget, 0))} delta="+8.2%" icon={Target} accent="bg-info/10 text-info" />
+          <KpiCard label="Pipeline value" value={formatCurrency(leads.reduce((s,l) => s + l.budget, 0))} delta="+8.2%" icon={Target} accent="bg-info/10 text-info" />
           <KpiCard label="Won this month" value={formatCurrency(wonValue)} delta="-1.4%" deltaPositive={false} icon={TrendingUp} accent="bg-success/10 text-success" />
         </div>
 
