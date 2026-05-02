@@ -1,0 +1,93 @@
+export type LeadStage = "new" | "contacted" | "qualified" | "viewing" | "negotiation" | "won" | "lost";
+export type LeadSource = "widget" | "manual" | "referral" | "facebook" | "google" | "import";
+export type TaskStatus = "open" | "in_progress" | "done";
+export type TaskPriority = "low" | "medium" | "high";
+export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show";
+export type PropertyStatus = "available" | "reserved" | "sold";
+export type PropertyType = "apartment" | "villa" | "townhouse" | "office" | "land";
+export type ActivityType = "call" | "note" | "email" | "whatsapp" | "stage_change" | "appointment" | "task";
+export type Role = "super_admin" | "admin" | "manager" | "agent";
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  avatarColor: string;
+  initials: string;
+}
+
+export interface Property {
+  id: string;
+  title: string;
+  type: PropertyType;
+  status: PropertyStatus;
+  price: number;
+  bedrooms: number;
+  bathrooms: number;
+  area: number; // sqm
+  location: string;
+  developer: string;
+  image: string;
+}
+
+export interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  stage: LeadStage;
+  source: LeadSource;
+  score: number; // 0-100
+  hot: boolean;
+  budget: number;
+  assignedTo: string; // user id
+  propertyInterest?: string; // property id
+  tags: string[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+  utmSource?: string;
+}
+
+export interface Activity {
+  id: string;
+  leadId: string;
+  type: ActivityType;
+  title: string;
+  description?: string;
+  userId: string;
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  leadId?: string;
+  assignedTo: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  dueAt: string;
+  createdAt: string;
+}
+
+export interface Appointment {
+  id: string;
+  title: string;
+  leadId: string;
+  propertyId?: string;
+  assignedTo: string;
+  status: AppointmentStatus;
+  scheduledAt: string;
+  durationMin: number;
+  location?: string;
+  notes?: string;
+}
+
+export interface PipelineStageDef {
+  id: LeadStage;
+  label: string;
+  tone: string;
+}
