@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
-import { LEADS, PIPELINE_STAGES, formatCurrency, getUser } from "@/lib/mock-data";
+import { PIPELINE_STAGES, formatCurrency, getUser } from "@/lib/mock-data";
+import { useRole } from "@/lib/role-context";
+import { useEffect } from "react";
 import type { Lead, LeadStage } from "@/lib/types";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,10 @@ export const Route = createFileRoute("/pipeline")({
 });
 
 function PipelinePage() {
-  const [leads, setLeads] = useState<Lead[]>(LEADS);
+  const { scopedLeads, scopeLabel, has } = useRole();
+  const [leads, setLeads] = useState<Lead[]>(scopedLeads);
+  // Re-sync when active role changes
+  useEffect(() => { setLeads(scopedLeads); }, [scopedLeads]);
 
   const onDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -38,8 +43,8 @@ function PipelinePage() {
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
       <PageHeader
         title="Pipeline"
-        description="Drag leads between stages to update their status."
-        actions={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Lead</Button>}
+        description={`${scopeLabel} · drag leads between stages to update their status.`}
+        actions={has("leads.create") ? <Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Lead</Button> : null}
       />
       <div className="min-h-0 flex-1 overflow-x-auto p-6">
         <DragDropContext onDragEnd={onDragEnd}>
