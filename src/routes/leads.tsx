@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Search, Filter, Download, Plus, Phone, Mail } from "lucide-react";
-import { LEADS, PIPELINE_STAGES, formatCurrency, getUser } from "@/lib/mock-data";
+import { PIPELINE_STAGES, formatCurrency, getUser } from "@/lib/mock-data";
+import { useRole } from "@/lib/role-context";
 import type { LeadStage } from "@/lib/types";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -23,13 +24,14 @@ export const Route = createFileRoute("/leads")({
 });
 
 function LeadsInbox() {
+  const { scopedLeads, scopeLabel, has } = useRole();
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState<LeadStage | "all">("all");
   const [hotOnly, setHotOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
-    return LEADS.filter(l => {
+    return scopedLeads.filter(l => {
       if (stage !== "all" && l.stage !== stage) return false;
       if (hotOnly && !l.hot) return false;
       if (query) {
@@ -38,7 +40,7 @@ function LeadsInbox() {
       }
       return true;
     });
-  }, [query, stage, hotOnly]);
+  }, [query, stage, hotOnly, scopedLeads]);
 
   const toggle = (id: string) => {
     const n = new Set(selected);
@@ -54,11 +56,13 @@ function LeadsInbox() {
     <div>
       <PageHeader
         title="Leads"
-        description={`${filtered.length} of ${LEADS.length} leads`}
+        description={`${filtered.length} of ${scopedLeads.length} leads · ${scopeLabel}`}
         actions={
           <>
             <Button variant="outline" size="sm"><Download className="mr-1.5 h-4 w-4" /> Export</Button>
-            <Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Lead</Button>
+            {has("leads.create") && (
+              <Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Lead</Button>
+            )}
           </>
         }
       />
