@@ -7,6 +7,27 @@ export type PropertyStatus = "available" | "reserved" | "sold";
 export type PropertyType = "apartment" | "villa" | "townhouse" | "office" | "land";
 export type ActivityType = "call" | "note" | "email" | "whatsapp" | "stage_change" | "appointment" | "task";
 export type Role = "super_admin" | "admin" | "manager" | "agent";
+// Extended role hierarchy for tenant org charts.
+// "admin" is kept as alias of "manager" for backward compat with existing data.
+export type OrgRole = "super_admin" | "manager" | "leader" | "agent";
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  plan: "starter" | "professional" | "enterprise";
+  status: "active" | "suspended" | "trial";
+  createdAt: string;
+  seats: number;
+  leadsCount: number;
+}
+
+export interface Team {
+  id: string;
+  tenantId: string;
+  name: string;
+  leaderId: string;
+}
 
 export interface User {
   id: string;
@@ -15,6 +36,8 @@ export interface User {
   role: Role;
   avatarColor: string;
   initials: string;
+  tenantId?: string;
+  teamId?: string;
 }
 
 export interface Property {
