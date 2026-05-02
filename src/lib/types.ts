@@ -65,6 +65,8 @@ export interface Lead {
   hot: boolean;
   budget: number;
   assignedTo: string; // user id
+  tenantId?: string;
+  teamId?: string;
   propertyInterest?: string; // property id
   tags: string[];
   notes?: string;
