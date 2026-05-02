@@ -3,6 +3,7 @@ import { LEADS, USERS, PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
+import { ClientChart } from "@/components/crm/ClientChart";
 
 export const Route = createFileRoute("/analytics")({
   head: () => ({ meta: [{ title: "Analytics — PropFlow CRM" }, { name: "description", content: "Pipeline conversion, lead source attribution, and agent performance." }] }),
@@ -42,7 +43,7 @@ function AnalyticsPage() {
         <Card className="p-5 shadow-card lg:col-span-2">
           <h3 className="text-sm font-semibold">Lead trend & wins</h3>
           <p className="text-xs text-muted-foreground">Monthly leads, conversions and revenue (in millions EGP)</p>
-          <div className="mt-4 h-64">
+          <ClientChart height={256}>
             <ResponsiveContainer>
               <LineChart data={monthly}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -55,13 +56,13 @@ function AnalyticsPage() {
                 <Line type="monotone" dataKey="value" stroke="var(--chart-4)" strokeWidth={2.5} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </ClientChart>
         </Card>
 
         <Card className="p-5 shadow-card">
           <h3 className="text-sm font-semibold">Conversion funnel</h3>
           <p className="text-xs text-muted-foreground">Leads at each pipeline stage</p>
-          <div className="mt-4 h-64">
+          <ClientChart height={256}>
             <ResponsiveContainer>
               <BarChart data={funnel} layout="vertical" margin={{ left: 30 }}>
                 <XAxis type="number" hide />
@@ -70,13 +71,13 @@ function AnalyticsPage() {
                 <Bar dataKey="count" fill="var(--chart-1)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ClientChart>
         </Card>
 
         <Card className="p-5 shadow-card">
           <h3 className="text-sm font-semibold">Lead sources</h3>
           <p className="text-xs text-muted-foreground">Where your leads are coming from</p>
-          <div className="mt-4 h-64">
+          <ClientChart height={256}>
             <ResponsiveContainer>
               <PieChart>
                 <Pie data={sourceData} dataKey="count" nameKey="source" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}>
@@ -86,13 +87,13 @@ function AnalyticsPage() {
                 <Legend wrapperStyle={{ fontSize: 11 }} />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ClientChart>
         </Card>
 
         <Card className="p-5 shadow-card lg:col-span-2">
           <h3 className="text-sm font-semibold">Agent performance</h3>
           <p className="text-xs text-muted-foreground">Leads owned vs leads won per agent</p>
-          <div className="mt-4 h-64">
+          <ClientChart height={256}>
             <ResponsiveContainer>
               <BarChart data={agentPerf}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -104,7 +105,7 @@ function AnalyticsPage() {
                 <Bar dataKey="won" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ClientChart>
         </Card>
       </div>
     </div>
