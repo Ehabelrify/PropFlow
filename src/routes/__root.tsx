@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
+import { DataProvider } from "@/lib/data-store";
 
 function NotFoundComponent() {
   return (
@@ -53,7 +54,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <RoleProvider>
+    <DataProvider>
+      <RoleProvider>
       <SidebarProvider>
         <div className="flex min-h-screen w-full bg-background">
           <AppSidebar />
@@ -66,6 +68,7 @@ function RootComponent() {
           <Toaster />
         </div>
       </SidebarProvider>
-    </RoleProvider>
+      </RoleProvider>
+    </DataProvider>
   );
 }
