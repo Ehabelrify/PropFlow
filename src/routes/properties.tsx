@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, MapPin, Bed, Bath, Maximize2 } from "lucide-react";
-import { PROPERTIES, formatCurrency } from "@/lib/mock-data";
+import { useStore } from "@/lib/data-store";
+import { formatCurrency } from "@/lib/mock-data";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { NewPropertyDialog } from "@/components/crm/dialogs";
 
 export const Route = createFileRoute("/properties")({
   head: () => ({ meta: [{ title: "Properties — PropFlow CRM" }, { name: "description", content: "Manage your real estate inventory." }] }),
@@ -17,14 +19,15 @@ const statusTone: Record<string, string> = {
 };
 
 function PropertiesPage() {
+  const { properties } = useStore();
   return (
     <div>
-      <PageHeader title="Properties" description={`${PROPERTIES.length} listings in your inventory.`} actions={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> Add Property</Button>} />
+      <PageHeader title="Properties" description={`${properties.length} listings in your inventory.`} actions={<NewPropertyDialog trigger={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> Add Property</Button>} />} />
       <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
-        {PROPERTIES.map(p => (
+        {properties.map(p => (
           <Card key={p.id} className="overflow-hidden shadow-card transition hover:shadow-elevated">
             <div className="relative h-44 w-full overflow-hidden bg-muted">
-              <img src={p.image} alt={p.title} className="h-full w-full object-cover transition group-hover:scale-105" loading="lazy" />
+              <img src={p.image} alt={p.title} className="h-full w-full object-cover" loading="lazy" />
               <span className={`absolute left-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase backdrop-blur ${statusTone[p.status]}`}>{p.status}</span>
             </div>
             <div className="p-4">

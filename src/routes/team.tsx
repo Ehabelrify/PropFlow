@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { USERS, LEADS } from "@/lib/mock-data";
+import { useStore } from "@/lib/data-store";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { InviteMemberDialog } from "@/components/crm/dialogs";
 
 export const Route = createFileRoute("/team")({
   head: () => ({ meta: [{ title: "Team — PropFlow CRM" }, { name: "description", content: "Manage organization members and roles." }] }),
@@ -11,13 +12,14 @@ export const Route = createFileRoute("/team")({
 });
 
 function TeamPage() {
+  const { users, leads } = useStore();
   return (
     <div>
-      <PageHeader title="Team" description="Members of your organization." actions={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> Invite</Button>} />
+      <PageHeader title="Team" description="Members of your organization." actions={<InviteMemberDialog trigger={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> Invite</Button>} />} />
       <div className="grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-3">
-        {USERS.map(u => {
-          const owned = LEADS.filter(l => l.assignedTo === u.id).length;
-          const won = LEADS.filter(l => l.assignedTo === u.id && l.stage === "won").length;
+        {users.map(u => {
+          const owned = leads.filter(l => l.assignedTo === u.id).length;
+          const won = leads.filter(l => l.assignedTo === u.id && l.stage === "won").length;
           return (
             <Card key={u.id} className="p-5 shadow-card">
               <div className="flex items-center gap-3">

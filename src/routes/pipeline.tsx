@@ -1,17 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
-import { PIPELINE_STAGES, formatCurrency, getUser } from "@/lib/mock-data";
+import { PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
 import { useRole } from "@/lib/role-context";
-import { useEffect } from "react";
-import type { Lead, LeadStage } from "@/lib/types";
+import { useStore } from "@/lib/data-store";
+import type { LeadStage } from "@/lib/types";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Button } from "@/components/ui/button";
-import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";
 import { Plus, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { NewLeadDialog } from "@/components/crm/dialogs";
 
 export const Route = createFileRoute("/pipeline")({
   head: () => ({
@@ -25,17 +24,15 @@ export const Route = createFileRoute("/pipeline")({
 
 function PipelinePage() {
   const { scopedLeads, scopeLabel, has } = useRole();
-  const [leads, setLeads] = useState<Lead[]>(scopedLeads);
-  // Re-sync when active role changes
-  useEffect(() => { setLeads(scopedLeads); }, [scopedLeads]);
+  const { setLeadStage } = useStore();
 
   const onDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === source.droppableId) return;
     const newStage = destination.droppableId as LeadStage;
-    setLeads(prev => prev.map(l => l.id === draggableId ? { ...l, stage: newStage } : l));
-    const lead = leads.find(l => l.id === draggableId);
+    setLeadStage(draggableId, newStage);
+    const lead = scopedLeads.find(l => l.id === draggableId);
     toast.success(`${lead?.name} moved to ${PIPELINE_STAGES.find(s => s.id === newStage)?.label}`);
   };
 
@@ -44,13 +41,15 @@ function PipelinePage() {
       <PageHeader
         title="Pipeline"
         description={`${scopeLabel} · drag leads between stages to update their status.`}
-        actions={has("leads.create") ? <Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Lead</Button> : null}
+        actions={has("leads.create") ? (
+          <NewLeadDialog trigger={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Lead</Button>} />
+        ) : null}
       />
       <div className="min-h-0 flex-1 overflow-x-auto p-6">
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex h-full gap-4">
             {PIPELINE_STAGES.map(stage => {
-              const stageLeads = leads.filter(l => l.stage === stage.id);
+              const stageLeads = scopedLeads.filter(l => l.stage === stage.id);
               const stageValue = stageLeads.reduce((s, l) => s + l.budget, 0);
               return (
                 <div key={stage.id} className="flex h-full w-72 shrink-0 flex-col rounded-xl border bg-card shadow-card">
