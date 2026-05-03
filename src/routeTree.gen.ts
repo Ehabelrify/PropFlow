@@ -20,6 +20,7 @@ import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LeadsLeadIdRouteImport } from './routes/leads.$leadId'
+import { Route as LeadsRouteImport } from './routes/leads.'
 
 const TeamRoute = TeamRouteImport.update({
   id: '/team',
@@ -76,6 +77,11 @@ const LeadsLeadIdRoute = LeadsLeadIdRouteImport.update({
   path: '/$leadId',
   getParentRoute: () => LeadsRoute,
 } as any)
+const LeadsRoute = LeadsRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LeadsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
+  '/leads/': typeof LeadsRoute
   '/leads/$leadId': typeof LeadsLeadIdRoute
 }
 export interface FileRoutesByTo {
@@ -95,12 +102,12 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/analytics': typeof AnalyticsRoute
   '/appointments': typeof AppointmentsRoute
-  '/leads': typeof LeadsRouteWithChildren
   '/pipeline': typeof PipelineRoute
   '/properties': typeof PropertiesRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
+  '/leads': typeof LeadsRoute
   '/leads/$leadId': typeof LeadsLeadIdRoute
 }
 export interface FileRoutesById {
@@ -115,6 +122,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
+  '/leads/': typeof LeadsRoute
   '/leads/$leadId': typeof LeadsLeadIdRoute
 }
 export interface FileRouteTypes {
@@ -130,6 +138,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/team'
+    | '/leads/'
     | '/leads/$leadId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -137,12 +146,12 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/appointments'
-    | '/leads'
     | '/pipeline'
     | '/properties'
     | '/settings'
     | '/tasks'
     | '/team'
+    | '/leads'
     | '/leads/$leadId'
   id:
     | '__root__'
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/team'
+    | '/leads/'
     | '/leads/$leadId'
   fileRoutesById: FileRoutesById
 }
@@ -251,14 +261,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LeadsLeadIdRouteImport
       parentRoute: typeof LeadsRoute
     }
+    '/leads/': {
+      id: '/leads/'
+      path: '/'
+      fullPath: '/leads/'
+      preLoaderRoute: typeof LeadsRouteImport
+      parentRoute: typeof LeadsRoute
+    }
   }
 }
 
 interface LeadsRouteChildren {
+  LeadsRoute: typeof LeadsRoute
   LeadsLeadIdRoute: typeof LeadsLeadIdRoute
 }
 
 const LeadsRouteChildren: LeadsRouteChildren = {
+  LeadsRoute: LeadsRoute,
   LeadsLeadIdRoute: LeadsLeadIdRoute,
 }
 

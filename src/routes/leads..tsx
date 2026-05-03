@@ -10,7 +10,7 @@ import { UserAvatar } from "@/components/crm/Avatar";
 import { format, formatDistanceToNow } from "date-fns";
 import { LogActivityDialog, ScheduleVisitDialog, NewTaskDialog } from "@/components/crm/dialogs";
 
-export const Route = createFileRoute("/leads/$leadId")({
+export const Route = createFileRoute("/leads/")({
   head: ({ params }) => ({
     meta: [
       { title: `Lead ${params.leadId} — PropFlow CRM` },
