@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown, Users, Target, Calendar, Flame, ArrowRight, CheckCircle2, Clock } from "lucide-react";
-import { TASKS, APPOINTMENTS, ACTIVITIES, formatCurrency, getUser, getLead, PIPELINE_STAGES } from "@/lib/mock-data";
+import { formatCurrency, PIPELINE_STAGES } from "@/lib/mock-data";
 import { useRole } from "@/lib/role-context";
+import { useStore } from "@/lib/data-store";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,7 @@ function KpiCard({
 
 function Dashboard() {
   const { user, orgRole, scopedLeads, scopeLabel } = useRole();
+  const { tasks: TASKS, appointments: APPOINTMENTS, activities: ACTIVITIES, users: USERS_S } = useStore();
   const leads = scopedLeads;
   const totalLeads = leads.length;
   const hotLeads = leads.filter(l => l.hot).length;
@@ -69,6 +71,8 @@ function Dashboard() {
   const upcoming = APPOINTMENTS.filter(a => a.status === "scheduled" && (orgRole === "super_admin" || leadIds.has(a.leadId) || a.assignedTo === user.id)).slice(0, 4);
   const overdueTasks = TASKS.filter(t => t.status !== "done" && new Date(t.dueAt) < new Date() && (orgRole === "super_admin" || (t.leadId && leadIds.has(t.leadId)) || t.assignedTo === user.id));
   const recentActivity = ACTIVITIES.filter(a => orgRole === "super_admin" || leadIds.has(a.leadId)).slice(0, 6);
+  const getLead = (id: string) => leads.find(l => l.id === id);
+  const getUser = (id: string) => USERS_S.find(u => u.id === id);
 
   const stageBreakdown = PIPELINE_STAGES.map(s => ({
     ...s,
