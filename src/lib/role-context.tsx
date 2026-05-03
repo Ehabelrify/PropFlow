@@ -1,18 +1,18 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { USERS, LEADS, TEAMS, orgRoleOf } from "./mock-data";
+import { useStore } from "./data-store";
+import { TEAMS, orgRoleOf } from "./mock-data";
 import type { User, Lead } from "./types";
 
 export type OrgRole = "super_admin" | "manager" | "leader" | "agent";
 
-/** Permission keys used across the UI. Keep flat & predictable. */
 export type Permission =
-  | "platform.view"            // super-admin console
+  | "platform.view"
   | "platform.manage_tenants"
-  | "tenant.view_all_leads"    // see every lead in tenant
-  | "tenant.manage_team"       // invite users, change roles
-  | "tenant.configure"         // settings, branding, widget
-  | "team.view_team_leads"     // leader scope
-  | "team.reassign"            // reassign within team
+  | "tenant.view_all_leads"
+  | "tenant.manage_team"
+  | "tenant.configure"
+  | "team.view_team_leads"
+  | "team.reassign"
   | "leads.create"
   | "leads.update_own"
   | "leads.delete"
@@ -55,8 +55,9 @@ interface RoleContextValue {
 const RoleContext = createContext<RoleContextValue | null>(null);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
+  const { users, leads } = useStore();
   const [userId, setUserId] = useState<string>("u1");
-  const user = USERS.find(u => u.id === userId) ?? USERS[0];
+  const user = users.find(u => u.id === userId) ?? users[0];
   const orgRole = orgRoleOf(user);
 
   const value = useMemo<RoleContextValue>(() => {
@@ -66,24 +67,23 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     let scopedLeads: Lead[] = [];
     let scopeLabel = "";
     if (orgRole === "super_admin") {
-      scopedLeads = LEADS;
+      scopedLeads = leads;
       scopeLabel = "Platform-wide";
     } else if (orgRole === "manager") {
-      scopedLeads = LEADS.filter(l => l.tenantId === user.tenantId);
+      scopedLeads = leads.filter(l => l.tenantId === user.tenantId);
       scopeLabel = "All teams";
     } else if (orgRole === "leader") {
-      // Leader sees leads belonging to agents on their team
-      const teamUserIds = new Set(USERS.filter(u => u.teamId === user.teamId).map(u => u.id));
-      scopedLeads = LEADS.filter(l => l.tenantId === user.tenantId && (teamUserIds.has(l.assignedTo) || l.teamId === user.teamId));
+      const teamUserIds = new Set(users.filter(u => u.teamId === user.teamId).map(u => u.id));
+      scopedLeads = leads.filter(l => l.tenantId === user.tenantId && (teamUserIds.has(l.assignedTo) || l.teamId === user.teamId));
       const team = TEAMS.find(t => t.id === user.teamId);
       scopeLabel = team ? `${team.name} team` : "My team";
     } else {
-      scopedLeads = LEADS.filter(l => l.assignedTo === user.id);
+      scopedLeads = leads.filter(l => l.assignedTo === user.id);
       scopeLabel = "Assigned to me";
     }
 
     return { user, orgRole, setUserId, has, scopedLeads, scopeLabel };
-  }, [user, orgRole]);
+  }, [user, orgRole, leads, users]);
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 }
