@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Filter, Download, Plus, Phone, Mail } from "lucide-react";
-import { PIPELINE_STAGES, formatCurrency, getUser } from "@/lib/mock-data";
+import { Search, Download, Plus, Phone, Mail, Trash2 } from "lucide-react";
+import { PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
 import { useRole } from "@/lib/role-context";
+import { useStore } from "@/lib/data-store";
 import type { LeadStage } from "@/lib/types";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,13 @@ import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatDistanceToNow } from "date-fns";
+import { NewLeadDialog, BulkAssignDialog, BulkStageDialog, LogActivityDialog } from "@/components/crm/dialogs";
+import { exportLeadsCsv } from "@/lib/export-csv";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/leads")({
   head: () => ({
@@ -25,6 +33,7 @@ export const Route = createFileRoute("/leads")({
 
 function LeadsInbox() {
   const { scopedLeads, scopeLabel, has } = useRole();
+  const { users, deleteLeads } = useStore();
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState<LeadStage | "all">("all");
   const [hotOnly, setHotOnly] = useState(false);
@@ -51,6 +60,13 @@ function LeadsInbox() {
     if (selected.size === filtered.length) setSelected(new Set());
     else setSelected(new Set(filtered.map(l => l.id)));
   };
+  const ids = Array.from(selected);
+
+  const handleDelete = () => {
+    deleteLeads(ids);
+    toast.success(`${ids.length} lead${ids.length > 1 ? "s" : ""} deleted`);
+    setSelected(new Set());
+  };
 
   return (
     <div>
@@ -59,9 +75,17 @@ function LeadsInbox() {
         description={`${filtered.length} of ${scopedLeads.length} leads · ${scopeLabel}`}
         actions={
           <>
-            <Button variant="outline" size="sm"><Download className="mr-1.5 h-4 w-4" /> Export</Button>
+            <Button variant="outline" size="sm" onClick={() => exportLeadsCsv(filtered)}>
+              <Download className="mr-1.5 h-4 w-4" /> Export
+            </Button>
             {has("leads.create") && (
-              <Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Lead</Button>
+              <NewLeadDialog
+                trigger={
+                  <Button size="sm" className="bg-gradient-brand text-primary-foreground">
+                    <Plus className="mr-1.5 h-4 w-4" /> New Lead
+                  </Button>
+                }
+              />
             )}
           </>
         }
@@ -85,10 +109,26 @@ function LeadsInbox() {
           <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary-soft px-4 py-2 text-sm">
             <span className="font-medium text-primary">{selected.size} selected</span>
             <span className="text-muted-foreground">·</span>
-            <Button variant="ghost" size="sm" className="h-7 text-xs">Assign</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs">Move stage</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs">Export</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive">Delete</Button>
+            <BulkAssignDialog ids={ids} onDone={() => setSelected(new Set())} trigger={<Button variant="ghost" size="sm" className="h-7 text-xs">Assign</Button>} />
+            <BulkStageDialog ids={ids} onDone={() => setSelected(new Set())} trigger={<Button variant="ghost" size="sm" className="h-7 text-xs">Move stage</Button>} />
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => exportLeadsCsv(filtered.filter(l => selected.has(l.id)))}>Export</Button>
+            {has("leads.delete") && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive">Delete</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {ids.length} lead{ids.length > 1 ? "s" : ""}?</AlertDialogTitle>
+                    <AlertDialogDescription>This also removes their activities, tasks, and appointments. This action cannot be undone.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         )}
 
@@ -104,20 +144,20 @@ function LeadsInbox() {
                 <th className="px-3 py-2.5 text-left font-medium">Source</th>
                 <th className="px-3 py-2.5 text-left font-medium">Owner</th>
                 <th className="px-3 py-2.5 text-left font-medium">Last activity</th>
-                <th className="w-20 px-3 py-2.5"></th>
+                <th className="w-24 px-3 py-2.5"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(lead => {
-                const owner = getUser(lead.assignedTo);
+                const owner = users.find(u => u.id === lead.assignedTo);
                 return (
-                  <tr key={lead.id} className="border-t transition-colors hover:bg-muted/30">
+                  <tr key={lead.id} className="group border-t transition-colors hover:bg-muted/30">
                     <td className="px-3 py-3"><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggle(lead.id)} /></td>
                     <td className="px-3 py-3">
-                      <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="group flex items-center gap-2">
+                      <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="flex items-center gap-2">
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-foreground group-hover:text-primary">{lead.name}</span>
+                            <span className="font-medium text-foreground hover:text-primary">{lead.name}</span>
                             {lead.hot && <HotBadge />}
                           </div>
                           <div className="text-xs text-muted-foreground">{lead.email}</div>
@@ -138,9 +178,9 @@ function LeadsInbox() {
                     <td className="px-3 py-3">{owner && <div className="flex items-center gap-2"><UserAvatar userId={owner.id} /><span className="text-xs">{owner.name.split(" ")[0]}</span></div>}</td>
                     <td className="px-3 py-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(lead.lastActivityAt), { addSuffix: true })}</td>
                     <td className="px-3 py-3">
-                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:opacity-100">
-                        <Button size="icon" variant="ghost" className="h-7 w-7"><Phone className="h-3.5 w-3.5" /></Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7"><Mail className="h-3.5 w-3.5" /></Button>
+                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                        <LogActivityDialog leadId={lead.id} type="call" title="Log call" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Phone className="h-3.5 w-3.5" /></Button>} />
+                        <LogActivityDialog leadId={lead.id} type="email" title="Log email" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Mail className="h-3.5 w-3.5" /></Button>} />
                       </div>
                     </td>
                   </tr>
