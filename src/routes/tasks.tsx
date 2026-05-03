@@ -1,16 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Plus, Clock, AlertCircle } from "lucide-react";
-import { TASKS, getUser, getLead } from "@/lib/mock-data";
+import { useStore } from "@/lib/data-store";
 import type { TaskStatus } from "@/lib/types";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/crm/Avatar";
 import { format, isPast } from "date-fns";
+import { NewTaskDialog } from "@/components/crm/dialogs";
 
 export const Route = createFileRoute("/tasks")({
-  head: () => ({ meta: [{ title: "Tasks — PropFlow CRM" }, { name: "description", content: "Track open, in-progress, and completed tasks across your team." }] }),
+  head: () => ({ meta: [{ title: "Tasks — PropFlow CRM" }, { name: "description", content: "Track tasks across your team." }] }),
   component: TasksPage,
 });
 
@@ -19,24 +20,25 @@ function priorityTone(p: string) {
 }
 
 function TasksPage() {
+  const { tasks, users, leads, toggleTask } = useStore();
   const [filter, setFilter] = useState<TaskStatus | "all" | "overdue">("all");
-  const list = TASKS.filter(t => {
+  const list = tasks.filter(t => {
     if (filter === "all") return true;
     if (filter === "overdue") return t.status !== "done" && isPast(new Date(t.dueAt));
     return t.status === filter;
   }).sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
 
   const tabs: { id: typeof filter; label: string; count: number }[] = [
-    { id: "all", label: "All", count: TASKS.length },
-    { id: "open", label: "Open", count: TASKS.filter(t => t.status === "open").length },
-    { id: "in_progress", label: "In progress", count: TASKS.filter(t => t.status === "in_progress").length },
-    { id: "overdue", label: "Overdue", count: TASKS.filter(t => t.status !== "done" && isPast(new Date(t.dueAt))).length },
-    { id: "done", label: "Done", count: TASKS.filter(t => t.status === "done").length },
+    { id: "all", label: "All", count: tasks.length },
+    { id: "open", label: "Open", count: tasks.filter(t => t.status === "open").length },
+    { id: "in_progress", label: "In progress", count: tasks.filter(t => t.status === "in_progress").length },
+    { id: "overdue", label: "Overdue", count: tasks.filter(t => t.status !== "done" && isPast(new Date(t.dueAt))).length },
+    { id: "done", label: "Done", count: tasks.filter(t => t.status === "done").length },
   ];
 
   return (
     <div>
-      <PageHeader title="Tasks" description="Stay on top of follow-ups and to-dos." actions={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Task</Button>} />
+      <PageHeader title="Tasks" description="Stay on top of follow-ups and to-dos." actions={<NewTaskDialog trigger={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Task</Button>} />} />
       <div className="space-y-4 p-6">
         <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-card p-1 shadow-card">
           {tabs.map(t => (
@@ -47,12 +49,12 @@ function TasksPage() {
         </div>
         <Card className="divide-y overflow-hidden shadow-card">
           {list.map(t => {
-            const owner = getUser(t.assignedTo);
-            const lead = t.leadId ? getLead(t.leadId) : null;
+            const owner = users.find(u => u.id === t.assignedTo);
+            const lead = t.leadId ? leads.find(l => l.id === t.leadId) : null;
             const overdue = t.status !== "done" && isPast(new Date(t.dueAt));
             return (
               <div key={t.id} className="flex items-center gap-3 p-4 transition hover:bg-muted/30">
-                <input type="checkbox" defaultChecked={t.status === "done"} className="h-4 w-4 rounded border-border" />
+                <input type="checkbox" checked={t.status === "done"} onChange={() => toggleTask(t.id)} className="h-4 w-4 rounded border-border" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className={`text-sm font-medium ${t.status === "done" ? "line-through text-muted-foreground" : ""}`}>{t.title}</p>

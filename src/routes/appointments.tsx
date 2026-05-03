@@ -1,14 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, MapPin } from "lucide-react";
-import { APPOINTMENTS, getLead, getUser, getProperty } from "@/lib/mock-data";
+import { useStore } from "@/lib/data-store";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/crm/Avatar";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { format, isToday, isTomorrow, isPast } from "date-fns";
+import { ScheduleVisitDialog } from "@/components/crm/dialogs";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/appointments")({
-  head: () => ({ meta: [{ title: "Appointments — PropFlow CRM" }, { name: "description", content: "Schedule and track property visits and meetings." }] }),
+  head: () => ({ meta: [{ title: "Appointments — PropFlow CRM" }, { name: "description", content: "Schedule and track property visits." }] }),
   component: AppointmentsPage,
 });
 
@@ -20,7 +25,8 @@ const statusTone: Record<string, string> = {
 };
 
 function AppointmentsPage() {
-  const sorted = [...APPOINTMENTS].sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+  const { appointments, leads, properties, users, setAppointmentStatus } = useStore();
+  const sorted = [...appointments].sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   const groups = sorted.reduce((acc, a) => {
     const d = new Date(a.scheduledAt);
     let key = format(d, "EEEE, MMM d");
@@ -33,16 +39,16 @@ function AppointmentsPage() {
 
   return (
     <div>
-      <PageHeader title="Appointments" description="Property visits and customer meetings." actions={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Visit</Button>} />
+      <PageHeader title="Appointments" description="Property visits and customer meetings." actions={<ScheduleVisitDialog trigger={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> New Visit</Button>} />} />
       <div className="space-y-6 p-6">
         {Object.entries(groups).map(([day, items]) => (
           <div key={day}>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{day}</h3>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {items.map(a => {
-                const lead = getLead(a.leadId);
-                const property = getProperty(a.propertyId);
-                const owner = getUser(a.assignedTo);
+                const lead = leads.find(l => l.id === a.leadId);
+                const property = properties.find(p => p.id === a.propertyId);
+                const owner = users.find(u => u.id === a.assignedTo);
                 return (
                   <Card key={a.id} className="p-4 shadow-card transition hover:shadow-elevated">
                     <div className="flex items-start justify-between">
@@ -50,7 +56,18 @@ function AppointmentsPage() {
                         <p className="text-xs text-muted-foreground">{format(new Date(a.scheduledAt), "h:mm a")} · {a.durationMin}m</p>
                         {lead && <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="mt-0.5 block text-sm font-semibold hover:text-primary">{lead.name}</Link>}
                       </div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusTone[a.status]}`}>{a.status.replace("_", " ")}</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusTone[a.status]}`}>{a.status.replace("_", " ")}</button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {(["scheduled", "completed", "cancelled", "no_show"] as const).map(s => (
+                            <DropdownMenuItem key={s} onClick={() => { setAppointmentStatus(a.id, s); toast.success(`Marked ${s.replace("_", " ")}`); }}>
+                              <span className="capitalize">{s.replace("_", " ")}</span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     {property && <p className="mt-2 line-clamp-1 text-xs text-muted-foreground">{property.title}</p>}
                     <div className="mt-3 flex items-center justify-between">
