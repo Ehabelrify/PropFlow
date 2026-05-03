@@ -1,21 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Copy, Code2 } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
-  head: () => ({ meta: [{ title: "Settings — PropFlow CRM" }, { name: "description", content: "Tenant branding, widget configuration, and preferences." }] }),
+  head: () => ({ meta: [{ title: "Settings — PropFlow CRM" }, { name: "description", content: "Workspace, branding, and integrations." }] }),
   component: SettingsPage,
 });
 
 function SettingsPage() {
+  const [name, setName] = useState("Acme Realty Group");
+  const [slug, setSlug] = useState("acme-realty");
+  const [currency, setCurrency] = useState("EGP");
+
   const widgetSnippet = `<script src="https://cdn.propflow.app/widget.js"
-  data-tenant="acme-realty"
+  data-tenant="${slug}"
   data-key="pk_live_3f8a..."
   defer></script>`;
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(widgetSnippet);
+    toast.success("Snippet copied");
+  };
 
   return (
     <div>
@@ -25,10 +36,10 @@ function SettingsPage() {
           <h3 className="text-sm font-semibold">Organization</h3>
           <p className="text-xs text-muted-foreground">Public details for your tenant.</p>
           <div className="mt-4 space-y-3">
-            <div><Label className="text-xs">Company name</Label><Input defaultValue="Acme Realty Group" className="mt-1" /></div>
-            <div><Label className="text-xs">Workspace URL</Label><Input defaultValue="acme-realty" className="mt-1" /></div>
-            <div><Label className="text-xs">Default currency</Label><Input defaultValue="EGP" className="mt-1" /></div>
-            <Button size="sm" className="bg-gradient-brand text-primary-foreground">Save changes</Button>
+            <div><Label className="text-xs">Company name</Label><Input value={name} onChange={e => setName(e.target.value)} className="mt-1" /></div>
+            <div><Label className="text-xs">Workspace URL</Label><Input value={slug} onChange={e => setSlug(e.target.value)} className="mt-1" /></div>
+            <div><Label className="text-xs">Default currency</Label><Input value={currency} onChange={e => setCurrency(e.target.value)} className="mt-1" /></div>
+            <Button size="sm" className="bg-gradient-brand text-primary-foreground" onClick={() => toast.success("Settings saved")}>Save changes</Button>
           </div>
         </Card>
 
@@ -36,7 +47,7 @@ function SettingsPage() {
           <h3 className="text-sm font-semibold flex items-center gap-2"><Code2 className="h-4 w-4" /> Embed widget</h3>
           <p className="text-xs text-muted-foreground">Drop this snippet on your website to capture leads.</p>
           <pre className="mt-3 overflow-x-auto rounded-md bg-muted p-3 text-[11px] leading-relaxed">{widgetSnippet}</pre>
-          <Button size="sm" variant="outline" className="mt-3"><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy snippet</Button>
+          <Button size="sm" variant="outline" className="mt-3" onClick={copy}><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy snippet</Button>
         </Card>
 
         <Card className="p-5 shadow-card lg:col-span-2">
