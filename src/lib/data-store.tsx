@@ -20,6 +20,10 @@ interface Store {
   users: User[];
   tenants: Tenant[];
   activities: Activity[];
+  tenantTags: string[];
+
+  // tags
+  addTag: (tag: string) => void;
 
   // leads
   addLead: (l: Omit<Lead, "id" | "createdAt" | "updatedAt" | "lastActivityAt" | "tags"> & { tags?: string[] }) => Lead;
@@ -66,6 +70,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>(SEED_USERS);
   const [tenants, setTenants] = useState<Tenant[]>(SEED_TENANTS);
   const [activities, setActivities] = useState<Activity[]>(SEED_ACTS);
+  const [tenantTags, setTenantTags] = useState<string[]>([
+    "Investor", "VIP", "Mortgage", "Cash Buyer", "First Time Buyer", "Foreign"
+  ]);
+
+  const addTag: Store["addTag"] = useCallback((tag) => {
+    setTenantTags(prev => prev.includes(tag) ? prev : [...prev, tag]);
+  }, []);
 
   const logActivity = useCallback((leadId: string, type: ActivityType, title: string, userId: string, description?: string) => {
     setActivities(prev => [
@@ -183,8 +194,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value: Store = {
-    leads, tasks, appointments, properties, users, tenants, activities,
-    addLead, updateLead, deleteLeads, setLeadStage, assignLeads, bulkSetStage,
+    leads, tasks, appointments, properties, users, tenants, activities, tenantTags,
+    addTag, addLead, updateLead, deleteLeads, setLeadStage, assignLeads, bulkSetStage,
     logActivity,
     addTask, toggleTask, setTaskStatus,
     addAppointment, setAppointmentStatus,

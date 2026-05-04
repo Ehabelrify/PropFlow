@@ -110,6 +110,12 @@ export const LEADS: Lead[] = NAMES.map((name, i) => {
     teamId: owner.teamId,
     propertyInterest: srand() > 0.3 ? spick(PROPERTIES).id : undefined,
     tags: Array.from(new Set([spick(TAGS), spick(TAGS)])).slice(0, sint(1, 2)),
+    requirements: srand() > 0.5 ? {
+      bedrooms: sint(1, 5),
+      bathrooms: sint(1, 4),
+      area: sint(80, 400),
+      location: spick(LOCATIONS),
+    } : undefined,
     createdAt: new Date(now - createdDaysAgo * day).toISOString(),
     updatedAt: new Date(now - lastDaysAgo * day).toISOString(),
     lastActivityAt: new Date(now - lastDaysAgo * day).toISOString(),

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
   ArrowLeft, Phone, Mail, MessageCircle, Calendar, Plus, MapPin, Building2,
-  FileText, ArrowRight, CheckCircle2, Clock, CircleDot, Send,
+  FileText, ArrowRight, CheckCircle2, Clock, CircleDot, Send, Flame, X, Tag, Edit3, PlusCircle,
 } from "lucide-react";
 import { formatCurrency, PIPELINE_STAGES } from "@/lib/mock-data";
 import { useStore } from "@/lib/data-store";
@@ -10,6 +10,11 @@ import { useRole } from "@/lib/role-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StageBadge } from "@/components/crm/StageBadge";
 import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";
@@ -85,11 +90,14 @@ export const Route = createFileRoute("/leads/$leadId")({
 
 function LeadDetail() {
   const { leadId } = Route.useParams();
-  const { leads, users, properties, activities, tasks, appointments, setLeadStage, toggleTask, logActivity } = useStore();
-  const { user } = useRole();
+  const { leads, users, properties, activities, tasks, appointments, setLeadStage, toggleTask, logActivity, updateLead, tenantTags, addTag } = useStore();
+  const { user, orgRole } = useRole();
   const lead = leads.find(l => l.id === leadId);
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const [noteText, setNoteText] = useState("");
+  const [newTag, setNewTag] = useState("");
+  const [reqEdits, setReqEdits] = useState(lead?.requirements || {});
+  const [reqDialogOpen, setReqDialogOpen] = useState(false);
 
   if (!lead) return <div className="p-12 text-center text-sm text-muted-foreground">Lead not found.</div>;
 
@@ -125,6 +133,29 @@ function LeadDetail() {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submitNote();
   };
 
+  const saveRequirements = () => {
+    updateLead(lead.id, { requirements: reqEdits });
+    setReqDialogOpen(false);
+    toast.success("Requirements updated");
+  };
+
+  const toggleLeadTag = (tag: string) => {
+    const nextTags = lead.tags.includes(tag) 
+      ? lead.tags.filter(t => t !== tag) 
+      : [...lead.tags, tag];
+    updateLead(lead.id, { tags: nextTags });
+  };
+
+  const handleAddNewTag = () => {
+    if (!newTag.trim()) return;
+    const t = newTag.trim();
+    addTag(t);
+    if (!lead.tags.includes(t)) {
+      updateLead(lead.id, { tags: [...lead.tags, t] });
+    }
+    setNewTag("");
+  };
+
   /* --- JSX --- */
   return (
     <div>
@@ -142,7 +173,9 @@ function LeadDetail() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-semibold tracking-tight">{lead.name}</h1>
-                  {lead.hot && <HotBadge />}
+                  <button onClick={() => updateLead(lead.id, { hot: !lead.hot })} className={`flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-medium uppercase tracking-wider transition-colors ${lead.hot ? "border-hot bg-hot/10 text-hot hover:bg-hot/20" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                    <Flame className="h-3 w-3" /> Hot
+                  </button>
                 </div>
                 <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
                   <a href={`mailto:${lead.email}`} className="hover:text-foreground">{lead.email}</a>
@@ -317,18 +350,94 @@ function LeadDetail() {
               <div className="flex items-center justify-between"><dt className="text-muted-foreground">Owner</dt><dd>{owner && <div className="flex items-center gap-1.5"><UserAvatar userId={owner.id} /><span className="text-xs">{owner.name}</span></div>}</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Created</dt><dd className="text-xs">{formatDistanceToNow(new Date(lead.createdAt), { addSuffix: true })}</dd></div>
             </dl>
-            {lead.tags.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1">
-                {lead.tags.map(t => <span key={t} className="rounded-full bg-accent px-2 py-0.5 text-[11px] text-accent-foreground">{t}</span>)}
+            <div className="mt-4 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tags</h4>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground"><PlusCircle className="h-3 w-3" /></Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-56 p-3">
+                    <h4 className="mb-2 text-sm font-semibold">Manage Tags</h4>
+                    <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
+                      {tenantTags.map(t => (
+                        <label key={t} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50 cursor-pointer">
+                          <input type="checkbox" checked={lead.tags.includes(t)} onChange={() => toggleLeadTag(t)} className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5" />
+                          <span className="text-sm">{t}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {["super_admin", "manager", "leader"].includes(orgRole) && (
+                      <div className="mt-3 flex items-center gap-2 border-t pt-3">
+                        <Input value={newTag} onChange={e => setNewTag(e.target.value)} placeholder="New tag..." className="h-8 text-xs" />
+                        <Button size="sm" onClick={handleAddNewTag} className="h-8 px-2" disabled={!newTag.trim()}>Add</Button>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
               </div>
-            )}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {lead.tags.length === 0 && <span className="text-xs text-muted-foreground">No tags</span>}
+                {lead.tags.map(t => (
+                  <span key={t} className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
           </Card>
 
-          {property && (
+          <Card className="p-5 shadow-card">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Requirements</h3>
+              <Dialog open={reqDialogOpen} onOpenChange={setReqDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"><Edit3 className="h-3.5 w-3.5" /></Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Requirements</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="bedrooms" className="text-right text-xs">Bedrooms</Label>
+                      <Input id="bedrooms" type="number" value={reqEdits.bedrooms || ""} onChange={e => setReqEdits({...reqEdits, bedrooms: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="bathrooms" className="text-right text-xs">Bathrooms</Label>
+                      <Input id="bathrooms" type="number" value={reqEdits.bathrooms || ""} onChange={e => setReqEdits({...reqEdits, bathrooms: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="area" className="text-right text-xs">Area (sqm)</Label>
+                      <Input id="area" type="number" value={reqEdits.area || ""} onChange={e => setReqEdits({...reqEdits, area: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="location" className="text-right text-xs">Location</Label>
+                      <Input id="location" value={reqEdits.location || ""} onChange={e => setReqEdits({...reqEdits, location: e.target.value})} className="col-span-3 h-8" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button onClick={saveRequirements}>Save</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <dl className="mt-3 space-y-2.5 text-sm">
+              <div className="flex justify-between"><dt className="text-muted-foreground">Bedrooms</dt><dd className="font-medium">{lead.requirements?.bedrooms || "-"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Bathrooms</dt><dd className="font-medium">{lead.requirements?.bathrooms || "-"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Area</dt><dd className="font-medium">{lead.requirements?.area ? `${lead.requirements.area} sqm` : "-"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Location</dt><dd className="font-medium capitalize">{lead.requirements?.location || "-"}</dd></div>
+            </dl>
+          </Card>
+
+          {property ? (
             <Card className="overflow-hidden shadow-card">
               <img src={property.image} alt={property.title} className="h-32 w-full object-cover" loading="lazy" />
               <div className="p-4">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Interested in</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Interested in</p>
+                  <Button variant="ghost" size="icon" onClick={() => updateLead(lead.id, { propertyInterest: undefined })} className="h-6 w-6 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></Button>
+                </div>
                 <h4 className="mt-1 text-sm font-semibold">{property.title}</h4>
                 <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <MapPin className="h-3 w-3" /> {property.location}
@@ -337,6 +446,32 @@ function LeadDetail() {
                 </div>
                 <p className="mt-2 text-sm font-bold text-primary">{formatCurrency(property.price)}</p>
               </div>
+            </Card>
+          ) : (
+            <Card className="p-5 shadow-card flex flex-col items-center justify-center text-center">
+              <Building2 className="mb-2 h-8 w-8 text-muted-foreground/50" />
+              <p className="mb-3 text-sm text-muted-foreground">No property selected</p>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline">Select Property</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Select Property Interest</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-3 py-4 max-h-[60vh] overflow-y-auto">
+                    {properties.map(p => (
+                      <button key={p.id} onClick={() => updateLead(lead.id, { propertyInterest: p.id })} className="flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50">
+                        <img src={p.image} alt="" className="h-12 w-16 rounded object-cover" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{p.title}</p>
+                          <p className="text-xs text-muted-foreground truncate">{p.location} · {formatCurrency(p.price)}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </Card>
           )}
 

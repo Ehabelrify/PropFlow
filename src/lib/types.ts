@@ -70,6 +70,12 @@ export interface Lead {
   propertyInterest?: string; // property id
   tags: string[];
   notes?: string;
+  requirements?: {
+    bedrooms?: number;
+    bathrooms?: number;
+    area?: number;
+    location?: string;
+  };
   createdAt: string;
   updatedAt: string;
   lastActivityAt: string;
