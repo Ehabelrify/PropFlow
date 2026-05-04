@@ -1,36 +1,36 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, Phone, Mail, MessageCircle, Calendar, Plus, Flame, MapPin, Building2 } from "lucide-react";
-import { LEADS, ACTIVITIES, TASKS, APPOINTMENTS, getLead, getUser, getProperty, formatCurrency, PIPELINE_STAGES } from "@/lib/mock-data";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowLeft, Phone, Mail, MessageCircle, Calendar, Plus, MapPin, Building2 } from "lucide-react";
+import { formatCurrency, PIPELINE_STAGES } from "@/lib/mock-data";
+import { useStore } from "@/lib/data-store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StageBadge } from "@/components/crm/StageBadge";
 import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";
 import { format, formatDistanceToNow } from "date-fns";
+import { LogActivityDialog, ScheduleVisitDialog, NewTaskDialog } from "@/components/crm/dialogs";
 
 export const Route = createFileRoute("/leads/$leadId")({
-  head: ({ params }) => {
-    const lead = getLead(params.leadId);
-    return {
-      meta: [
-        { title: lead ? `${lead.name} — PropFlow CRM` : "Lead — PropFlow CRM" },
-        { name: "description", content: lead ? `360° view for ${lead.name}: activity timeline, tasks, and appointments.` : "Lead detail" },
-      ],
-    };
-  },
+  head: ({ params }) => ({
+    meta: [
+      { title: `Lead ${params.leadId} — PropFlow CRM` },
+      { name: "description", content: "Lead detail with full activity timeline." },
+    ],
+  }),
   notFoundComponent: () => <div className="p-12 text-center text-sm text-muted-foreground">Lead not found.</div>,
   component: LeadDetail,
 });
 
 function LeadDetail() {
   const { leadId } = Route.useParams();
-  const lead = getLead(leadId);
+  const { leads, users, properties, activities, tasks, appointments, setLeadStage, toggleTask } = useStore();
+  const lead = leads.find(l => l.id === leadId);
   if (!lead) return <div className="p-12 text-center text-sm text-muted-foreground">Lead not found.</div>;
-  const owner = getUser(lead.assignedTo);
-  const property = getProperty(lead.propertyInterest);
-  const activities = ACTIVITIES.filter(a => a.leadId === lead.id);
-  const tasks = TASKS.filter(t => t.leadId === lead.id);
-  const appointments = APPOINTMENTS.filter(a => a.leadId === lead.id);
+  const owner = users.find(u => u.id === lead.assignedTo);
+  const property = properties.find(p => p.id === lead.propertyInterest);
+  const leadActs = activities.filter(a => a.leadId === lead.id);
+  const leadTasks = tasks.filter(t => t.leadId === lead.id);
+  const leadAppts = appointments.filter(a => a.leadId === lead.id);
 
   return (
     <div>
@@ -50,16 +50,18 @@ function LeadDetail() {
                   {lead.hot && <HotBadge />}
                 </div>
                 <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-                  <span>{lead.email}</span><span>·</span><span>{lead.phone}</span>
+                  <a href={`mailto:${lead.email}`} className="hover:text-foreground">{lead.email}</a>
+                  <span>·</span>
+                  <a href={`tel:${lead.phone}`} className="hover:text-foreground">{lead.phone}</a>
                 </div>
               </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline"><Phone className="mr-1.5 h-3.5 w-3.5" /> Call</Button>
-            <Button size="sm" variant="outline"><Mail className="mr-1.5 h-3.5 w-3.5" /> Email</Button>
-            <Button size="sm" variant="outline"><MessageCircle className="mr-1.5 h-3.5 w-3.5" /> WhatsApp</Button>
-            <Button size="sm" className="bg-gradient-brand text-primary-foreground"><Calendar className="mr-1.5 h-3.5 w-3.5" /> Schedule visit</Button>
+            <LogActivityDialog leadId={lead.id} type="call" title="Log call" trigger={<Button size="sm" variant="outline"><Phone className="mr-1.5 h-3.5 w-3.5" /> Call</Button>} />
+            <LogActivityDialog leadId={lead.id} type="email" title="Log email" trigger={<Button size="sm" variant="outline"><Mail className="mr-1.5 h-3.5 w-3.5" /> Email</Button>} />
+            <LogActivityDialog leadId={lead.id} type="whatsapp" title="Log WhatsApp message" trigger={<Button size="sm" variant="outline"><MessageCircle className="mr-1.5 h-3.5 w-3.5" /> WhatsApp</Button>} />
+            <ScheduleVisitDialog leadId={lead.id} trigger={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Calendar className="mr-1.5 h-3.5 w-3.5" /> Schedule visit</Button>} />
           </div>
         </div>
       </div>
@@ -71,26 +73,34 @@ function LeadDetail() {
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {PIPELINE_STAGES.filter(s => s.id !== "lost").map((s, i, arr) => {
                 const currentIdx = arr.findIndex(x => x.id === lead.stage);
-                const idx = i;
-                const reached = idx <= currentIdx;
+                const reached = i <= currentIdx;
                 return (
                   <div key={s.id} className="flex items-center">
-                    <button className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition ${reached ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"}`}>
+                    <button
+                      onClick={() => setLeadStage(lead.id, s.id)}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition ${reached ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"}`}
+                    >
                       {s.label}
                     </button>
-                    {idx < arr.length - 1 && <div className={`mx-0.5 h-px w-3 ${reached && idx < currentIdx ? "bg-primary" : "bg-border"}`} />}
+                    {i < arr.length - 1 && <div className={`mx-0.5 h-px w-3 ${reached && i < currentIdx ? "bg-primary" : "bg-border"}`} />}
                   </div>
                 );
               })}
+              <button
+                onClick={() => setLeadStage(lead.id, "lost")}
+                className={`ml-2 rounded-full border px-2.5 py-1 text-xs font-medium transition ${lead.stage === "lost" ? "border-destructive bg-destructive text-destructive-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
+              >
+                Lost
+              </button>
             </div>
           </Card>
 
           <Card className="p-5 shadow-card">
             <h3 className="text-sm font-semibold">Activity timeline</h3>
             <ol className="mt-4 space-y-4">
-              {activities.map((a, i) => (
+              {leadActs.map((a, i) => (
                 <li key={a.id} className="relative flex gap-3 pb-4 last:pb-0">
-                  {i < activities.length - 1 && <div className="absolute left-[14px] top-7 h-full w-px bg-border" />}
+                  {i < leadActs.length - 1 && <div className="absolute left-[14px] top-7 h-full w-px bg-border" />}
                   <div className="z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground">
                     {a.type === "call" && <Phone className="h-3.5 w-3.5" />}
                     {a.type === "email" && <Mail className="h-3.5 w-3.5" />}
@@ -99,12 +109,13 @@ function LeadDetail() {
                     {a.type === "stage_change" && <span className="text-xs">→</span>}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm"><span className="font-medium">{a.title}</span> <span className="text-muted-foreground">by {getUser(a.userId)?.name}</span></p>
+                    <p className="text-sm"><span className="font-medium">{a.title}</span> <span className="text-muted-foreground">by {users.find(u => u.id === a.userId)?.name}</span></p>
                     {a.description && <p className="mt-0.5 text-xs text-muted-foreground">{a.description}</p>}
                     <p className="mt-1 text-[11px] text-muted-foreground">{format(new Date(a.createdAt), "MMM d, yyyy · h:mm a")}</p>
                   </div>
                 </li>
               ))}
+              {leadActs.length === 0 && <p className="text-sm text-muted-foreground">No activity yet.</p>}
             </ol>
           </Card>
         </div>
@@ -147,13 +158,13 @@ function LeadDetail() {
           <Card className="p-5 shadow-card">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Tasks</h3>
-              <Button size="icon" variant="ghost" className="h-7 w-7"><Plus className="h-3.5 w-3.5" /></Button>
+              <NewTaskDialog leadId={lead.id} trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Plus className="h-3.5 w-3.5" /></Button>} />
             </div>
             <ul className="mt-2 space-y-2">
-              {tasks.length === 0 && <p className="text-xs text-muted-foreground">No tasks yet</p>}
-              {tasks.map(t => (
+              {leadTasks.length === 0 && <p className="text-xs text-muted-foreground">No tasks yet</p>}
+              {leadTasks.map(t => (
                 <li key={t.id} className="flex items-start gap-2 rounded p-1.5 hover:bg-muted/50">
-                  <input type="checkbox" defaultChecked={t.status === "done"} className="mt-1 h-3.5 w-3.5 rounded border-border" />
+                  <input type="checkbox" checked={t.status === "done"} onChange={() => toggleTask(t.id)} className="mt-1 h-3.5 w-3.5 rounded border-border" />
                   <div className="min-w-0 flex-1">
                     <p className={`text-xs ${t.status === "done" ? "line-through text-muted-foreground" : ""}`}>{t.title}</p>
                     <p className="text-[10px] text-muted-foreground">Due {format(new Date(t.dueAt), "MMM d")}</p>
@@ -163,11 +174,11 @@ function LeadDetail() {
             </ul>
           </Card>
 
-          {appointments.length > 0 && (
+          {leadAppts.length > 0 && (
             <Card className="p-5 shadow-card">
               <h3 className="text-sm font-semibold">Appointments</h3>
               <ul className="mt-2 space-y-2">
-                {appointments.map(a => (
+                {leadAppts.map(a => (
                   <li key={a.id} className="rounded p-1.5 text-xs hover:bg-muted/50">
                     <p className="font-medium">{format(new Date(a.scheduledAt), "MMM d, h:mm a")}</p>
                     <p className="text-muted-foreground capitalize">{a.location} · {a.status}</p>
