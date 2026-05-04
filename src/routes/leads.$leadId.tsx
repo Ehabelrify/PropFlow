@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StageBadge } from "@/components/crm/StageBadge";
-import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";
 import { format, formatDistanceToNow } from "date-fns";
 import { LogActivityDialog, ScheduleVisitDialog, NewTaskDialog } from "@/components/crm/dialogs";
@@ -390,7 +389,7 @@ function LeadDetail() {
           <Card className="p-5 shadow-card">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Requirements</h3>
-              <Dialog open={reqDialogOpen} onOpenChange={setReqDialogOpen}>
+              <Dialog open={reqDialogOpen} onOpenChange={(o) => { setReqDialogOpen(o); if (o) setReqEdits(lead.requirements || {}); }}>
                 <DialogTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"><Edit3 className="h-3.5 w-3.5" /></Button>
                 </DialogTrigger>
