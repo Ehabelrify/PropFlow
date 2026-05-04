@@ -1,14 +1,76 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Phone, Mail, MessageCircle, Calendar, Plus, MapPin, Building2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  ArrowLeft, Phone, Mail, MessageCircle, Calendar, Plus, MapPin, Building2,
+  FileText, ArrowRight, CheckCircle2, Clock, CircleDot, Send,
+} from "lucide-react";
 import { formatCurrency, PIPELINE_STAGES } from "@/lib/mock-data";
 import { useStore } from "@/lib/data-store";
+import { useRole } from "@/lib/role-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { StageBadge } from "@/components/crm/StageBadge";
 import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";
 import { format, formatDistanceToNow } from "date-fns";
 import { LogActivityDialog, ScheduleVisitDialog, NewTaskDialog } from "@/components/crm/dialogs";
+import { toast } from "sonner";
+import type { Activity, Task, Appointment } from "@/lib/types";
+
+type TimelineFilter = "all" | "calls" | "emails" | "notes" | "tasks" | "appointments" | "stages";
+
+type TimelineEntry = {
+  id: string;
+  kind: "activity" | "task" | "appointment";
+  sortDate: string;
+  activity?: Activity;
+  task?: Task;
+  appointment?: Appointment;
+};
+
+const FILTERS: { key: TimelineFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "notes", label: "Notes" },
+  { key: "calls", label: "Calls" },
+  { key: "emails", label: "Emails" },
+  { key: "tasks", label: "Tasks" },
+  { key: "appointments", label: "Visits" },
+  { key: "stages", label: "Stages" },
+];
+
+function matchesFilter(entry: TimelineEntry, filter: TimelineFilter): boolean {
+  if (filter === "all") return true;
+  if (entry.kind === "task") return filter === "tasks";
+  if (entry.kind === "appointment") return filter === "appointments";
+  const t = entry.activity!.type;
+  if (filter === "calls") return t === "call";
+  if (filter === "emails") return t === "email";
+  if (filter === "notes") return t === "note" || t === "whatsapp";
+  if (filter === "stages") return t === "stage_change";
+  return false;
+}
+
+function taskStatusIcon(status: string) {
+  if (status === "done") return <CheckCircle2 className="h-3.5 w-3.5 text-success" />;
+  if (status === "in_progress") return <Clock className="h-3.5 w-3.5 text-warning" />;
+  return <CircleDot className="h-3.5 w-3.5" />;
+}
+
+function appointmentStatusBadge(status: string) {
+  const map: Record<string, string> = {
+    scheduled: "bg-info/15 text-info",
+    completed: "bg-success/15 text-success",
+    cancelled: "bg-destructive/10 text-destructive",
+    no_show: "bg-warning/15 text-warning-foreground",
+  };
+  return <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ${map[status] ?? ""}`}>{status.replace("_", " ")}</span>;
+}
+
+function priorityDot(priority: string) {
+  const c = priority === "high" ? "bg-destructive" : priority === "medium" ? "bg-warning" : "bg-muted-foreground/40";
+  return <span className={`inline-block h-1.5 w-1.5 rounded-full ${c}`} />;
+}
 
 export const Route = createFileRoute("/leads/$leadId")({
   head: ({ params }) => ({
@@ -23,17 +85,50 @@ export const Route = createFileRoute("/leads/$leadId")({
 
 function LeadDetail() {
   const { leadId } = Route.useParams();
-  const { leads, users, properties, activities, tasks, appointments, setLeadStage, toggleTask } = useStore();
+  const { leads, users, properties, activities, tasks, appointments, setLeadStage, toggleTask, logActivity } = useStore();
+  const { user } = useRole();
   const lead = leads.find(l => l.id === leadId);
+  const [filter, setFilter] = useState<TimelineFilter>("all");
+  const [noteText, setNoteText] = useState("");
+
   if (!lead) return <div className="p-12 text-center text-sm text-muted-foreground">Lead not found.</div>;
+
   const owner = users.find(u => u.id === lead.assignedTo);
   const property = properties.find(p => p.id === lead.propertyInterest);
-  const leadActs = activities.filter(a => a.leadId === lead.id);
   const leadTasks = tasks.filter(t => t.leadId === lead.id);
   const leadAppts = appointments.filter(a => a.leadId === lead.id);
 
+  const timeline = useMemo(() => {
+    const entries: TimelineEntry[] = [];
+    activities.filter(a => a.leadId === lead.id).forEach(a => {
+      entries.push({ id: a.id, kind: "activity", sortDate: a.createdAt, activity: a });
+    });
+    leadTasks.forEach(t => {
+      entries.push({ id: `task-${t.id}`, kind: "task", sortDate: t.createdAt, task: t });
+    });
+    leadAppts.forEach(a => {
+      entries.push({ id: `appt-${a.id}`, kind: "appointment", sortDate: a.scheduledAt, appointment: a });
+    });
+    return entries.sort((a, b) => b.sortDate.localeCompare(a.sortDate));
+  }, [activities, lead.id, leadTasks, leadAppts]);
+
+  const filtered = useMemo(() => timeline.filter(e => matchesFilter(e, filter)), [timeline, filter]);
+
+  const submitNote = () => {
+    if (!noteText.trim()) return;
+    logActivity(lead.id, "note", "Note added", user.id, noteText.trim());
+    toast.success("Note added");
+    setNoteText("");
+  };
+
+  const handleNoteKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submitNote();
+  };
+
+  /* --- JSX --- */
   return (
     <div>
+      {/* Header */}
       <div className="border-b bg-gradient-subtle px-6 py-5">
         <Link to="/leads" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3 w-3" /> Back to leads
@@ -66,8 +161,11 @@ function LeadDetail() {
         </div>
       </div>
 
+      {/* Body */}
       <div className="grid gap-6 p-6 lg:grid-cols-3">
+        {/* Main column */}
         <div className="space-y-4 lg:col-span-2">
+          {/* Pipeline stage */}
           <Card className="p-5 shadow-card">
             <h3 className="text-sm font-semibold">Pipeline stage</h3>
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -76,50 +174,137 @@ function LeadDetail() {
                 const reached = i <= currentIdx;
                 return (
                   <div key={s.id} className="flex items-center">
-                    <button
-                      onClick={() => setLeadStage(lead.id, s.id)}
-                      className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition ${reached ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"}`}
-                    >
+                    <button onClick={() => setLeadStage(lead.id, s.id)} className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition ${reached ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"}`}>
                       {s.label}
                     </button>
                     {i < arr.length - 1 && <div className={`mx-0.5 h-px w-3 ${reached && i < currentIdx ? "bg-primary" : "bg-border"}`} />}
                   </div>
                 );
               })}
-              <button
-                onClick={() => setLeadStage(lead.id, "lost")}
-                className={`ml-2 rounded-full border px-2.5 py-1 text-xs font-medium transition ${lead.stage === "lost" ? "border-destructive bg-destructive text-destructive-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
-              >
+              <button onClick={() => setLeadStage(lead.id, "lost")} className={`ml-2 rounded-full border px-2.5 py-1 text-xs font-medium transition ${lead.stage === "lost" ? "border-destructive bg-destructive text-destructive-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}>
                 Lost
               </button>
             </div>
           </Card>
 
+          {/* Unified Timeline */}
           <Card className="p-5 shadow-card">
-            <h3 className="text-sm font-semibold">Activity timeline</h3>
-            <ol className="mt-4 space-y-4">
-              {leadActs.map((a, i) => (
-                <li key={a.id} className="relative flex gap-3 pb-4 last:pb-0">
-                  {i < leadActs.length - 1 && <div className="absolute left-[14px] top-7 h-full w-px bg-border" />}
-                  <div className="z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground">
-                    {a.type === "call" && <Phone className="h-3.5 w-3.5" />}
-                    {a.type === "email" && <Mail className="h-3.5 w-3.5" />}
-                    {a.type === "whatsapp" && <MessageCircle className="h-3.5 w-3.5" />}
-                    {a.type === "note" && <span className="text-xs">📝</span>}
-                    {a.type === "stage_change" && <span className="text-xs">→</span>}
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Timeline</h3>
+              <div className="flex items-center gap-1">
+                <NewTaskDialog leadId={lead.id} trigger={<Button size="sm" variant="ghost" className="h-7 text-xs"><Plus className="mr-1 h-3 w-3" /> Task</Button>} />
+                <LogActivityDialog leadId={lead.id} type="note" title="Add note" trigger={<Button size="sm" variant="ghost" className="h-7 text-xs"><FileText className="mr-1 h-3 w-3" /> Note</Button>} />
+              </div>
+            </div>
+
+            {/* Filter tabs */}
+            <div className="mt-3 flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
+              {FILTERS.map(f => (
+                <button key={f.key} onClick={() => setFilter(f.key)} className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${filter === f.key ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick note input */}
+            <div className="mt-4 flex gap-2">
+              <Textarea value={noteText} onChange={e => setNoteText(e.target.value)} onKeyDown={handleNoteKeyDown} placeholder="Add a quick note..." rows={2} className="min-h-[60px] resize-none text-sm" />
+              <Button size="icon" onClick={submitNote} disabled={!noteText.trim()} className="h-[60px] w-10 shrink-0 bg-gradient-brand text-primary-foreground disabled:opacity-40">
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Timeline list */}
+            <ol className="mt-4 space-y-1">
+              {filtered.map((entry, i) => (
+                <li key={entry.id} className="relative flex gap-3 pb-4 last:pb-0">
+                  {i < filtered.length - 1 && <div className="absolute left-[14px] top-7 h-full w-px bg-border" />}
+
+                  {/* Icon */}
+                  <div className={`z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
+                    entry.kind === "task" ? "border-chart-5/30 bg-chart-5/10" :
+                    entry.kind === "appointment" ? "border-info/30 bg-info/10" :
+                    "bg-card"
+                  } text-muted-foreground`}>
+                    {entry.kind === "activity" && entry.activity?.type === "call" && <Phone className="h-3.5 w-3.5" />}
+                    {entry.kind === "activity" && entry.activity?.type === "email" && <Mail className="h-3.5 w-3.5" />}
+                    {entry.kind === "activity" && entry.activity?.type === "whatsapp" && <MessageCircle className="h-3.5 w-3.5" />}
+                    {entry.kind === "activity" && entry.activity?.type === "note" && <FileText className="h-3.5 w-3.5" />}
+                    {entry.kind === "activity" && entry.activity?.type === "stage_change" && <ArrowRight className="h-3.5 w-3.5" />}
+                    {entry.kind === "activity" && entry.activity?.type === "appointment" && <Calendar className="h-3.5 w-3.5" />}
+                    {entry.kind === "activity" && entry.activity?.type === "task" && <CheckCircle2 className="h-3.5 w-3.5" />}
+                    {entry.kind === "task" && <CheckCircle2 className="h-3.5 w-3.5 text-chart-5" />}
+                    {entry.kind === "appointment" && <Calendar className="h-3.5 w-3.5 text-info" />}
                   </div>
+
+                  {/* Content */}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm"><span className="font-medium">{a.title}</span> <span className="text-muted-foreground">by {users.find(u => u.id === a.userId)?.name}</span></p>
-                    {a.description && <p className="mt-0.5 text-xs text-muted-foreground">{a.description}</p>}
-                    <p className="mt-1 text-[11px] text-muted-foreground">{format(new Date(a.createdAt), "MMM d, yyyy · h:mm a")}</p>
+                    {entry.kind === "activity" && entry.activity && (
+                      <>
+                        <p className="text-sm">
+                          <span className="font-medium">{entry.activity.title}</span>{" "}
+                          <span className="text-muted-foreground">by {users.find(u => u.id === entry.activity!.userId)?.name}</span>
+                        </p>
+                        {entry.activity.description && (
+                          <p className="mt-1 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{entry.activity.description}</p>
+                        )}
+                        <p className="mt-1 text-[11px] text-muted-foreground">{format(new Date(entry.activity.createdAt), "MMM d, yyyy · h:mm a")}</p>
+                      </>
+                    )}
+
+                    {entry.kind === "task" && entry.task && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{entry.task.title}</span>
+                          {taskStatusIcon(entry.task.status)}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">{priorityDot(entry.task.priority)} {entry.task.priority}</span>
+                          <span>·</span>
+                          <span>Due {format(new Date(entry.task.dueAt), "MMM d")}</span>
+                          <span>·</span>
+                          <span>{users.find(u => u.id === entry.task!.assignedTo)?.name}</span>
+                        </div>
+                        {entry.task.status !== "done" && (
+                          <button onClick={() => toggleTask(entry.task!.id)} className="mt-1.5 text-[11px] font-medium text-primary hover:underline">
+                            Mark complete
+                          </button>
+                        )}
+                        <p className="mt-1 text-[11px] text-muted-foreground">Created {format(new Date(entry.task.createdAt), "MMM d, yyyy")}</p>
+                      </>
+                    )}
+
+                    {entry.kind === "appointment" && entry.appointment && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{entry.appointment.title}</span>
+                          {appointmentStatusBadge(entry.appointment.status)}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>{format(new Date(entry.appointment.scheduledAt), "MMM d · h:mm a")}</span>
+                          <span>·</span>
+                          <span>{entry.appointment.durationMin} min</span>
+                          {entry.appointment.location && (
+                            <>
+                              <span>·</span>
+                              <span className="flex items-center gap-0.5"><MapPin className="h-3 w-3" /> {entry.appointment.location}</span>
+                            </>
+                          )}
+                        </div>
+                        {entry.appointment.notes && (
+                          <p className="mt-1 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{entry.appointment.notes}</p>
+                        )}
+                      </>
+                    )}
                   </div>
                 </li>
               ))}
-              {leadActs.length === 0 && <p className="text-sm text-muted-foreground">No activity yet.</p>}
+              {filtered.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No timeline entries match this filter.</p>}
             </ol>
           </Card>
         </div>
 
+        {/* Sidebar */}
         <div className="space-y-4">
           <Card className="p-5 shadow-card">
             <h3 className="text-sm font-semibold">Details</h3>
