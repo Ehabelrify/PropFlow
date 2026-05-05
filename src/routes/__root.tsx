@@ -1,4 +1,5 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute, HeadContent, Scripts, useRouterState, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import appCss from "../styles.css?url";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
@@ -6,6 +7,8 @@ import { Topbar } from "@/components/layout/Topbar";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
 import { DataProvider } from "@/lib/data-store";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { Loader2 } from "lucide-react";
 
 function NotFoundComponent() {
   return (
@@ -54,21 +57,59 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <DataProvider>
-      <RoleProvider>
-      <SidebarProvider>
-        <div className="flex min-h-screen w-full bg-background">
-          <AppSidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Topbar />
-            <main className="flex-1 min-w-0">
-              <Outlet />
-            </main>
-          </div>
+    <AuthProvider>
+      <DataProvider>
+        <RoleProvider>
+          <RootShellSwitch />
           <Toaster />
+        </RoleProvider>
+      </DataProvider>
+    </AuthProvider>
+  );
+}
+
+const PUBLIC_PREFIXES = ["/login", "/reset-password", "/demo", "/widget"];
+
+function RootShellSwitch() {
+  const path = useRouterState({ select: (r) => r.location.pathname });
+  const isPublic = PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + "/"));
+
+  if (isPublic) return <Outlet />;
+  return <AuthGuardedShell />;
+}
+
+function AuthGuardedShell() {
+  const { isAuthed, loading } = useAuth();
+  const navigate = useNavigate();
+  const path = useRouterState({ select: (r) => r.location.pathname });
+  const search = useRouterState({ select: (r) => r.location.search });
+
+  useEffect(() => {
+    if (!loading && !isAuthed) {
+      const redirect = path + (Object.keys(search).length ? `?${new URLSearchParams(search as any).toString()}` : "");
+      navigate({ to: "/login", search: { redirect } as any });
+    }
+  }, [isAuthed, loading, navigate, path, search]);
+
+  if (loading || !isAuthed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full bg-background">
+        <AppSidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar />
+          <main className="flex-1 min-w-0">
+            <Outlet />
+          </main>
         </div>
-      </SidebarProvider>
-      </RoleProvider>
-    </DataProvider>
+      </div>
+    </SidebarProvider>
   );
 }
