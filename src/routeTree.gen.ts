@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WidgetRouteImport } from './routes/widget'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -17,6 +18,7 @@ import { Route as PropertiesRouteImport } from './routes/properties'
 import { Route as PipelineRouteImport } from './routes/pipeline'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LeadsRouteImport } from './routes/leads'
+import { Route as DemoRouteImport } from './routes/demo'
 import { Route as AppointmentsRouteImport } from './routes/appointments'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
@@ -24,6 +26,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LeadsIndexRouteImport } from './routes/leads.index'
 import { Route as LeadsLeadIdRouteImport } from './routes/leads.$leadId'
 
+const WidgetRoute = WidgetRouteImport.update({
+  id: '/widget',
+  path: '/widget',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TeamRoute = TeamRouteImport.update({
   id: '/team',
   path: '/team',
@@ -64,6 +71,11 @@ const LeadsRoute = LeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppointmentsRoute = AppointmentsRouteImport.update({
   id: '/appointments',
   path: '/appointments',
@@ -100,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/analytics': typeof AnalyticsRoute
   '/appointments': typeof AppointmentsRoute
+  '/demo': typeof DemoRoute
   '/leads': typeof LeadsRouteWithChildren
   '/login': typeof LoginRoute
   '/pipeline': typeof PipelineRoute
@@ -108,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
+  '/widget': typeof WidgetRoute
   '/leads/$leadId': typeof LeadsLeadIdRoute
   '/leads/': typeof LeadsIndexRoute
 }
@@ -116,6 +130,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/analytics': typeof AnalyticsRoute
   '/appointments': typeof AppointmentsRoute
+  '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
   '/pipeline': typeof PipelineRoute
   '/properties': typeof PropertiesRoute
@@ -123,6 +138,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
+  '/widget': typeof WidgetRoute
   '/leads/$leadId': typeof LeadsLeadIdRoute
   '/leads': typeof LeadsIndexRoute
 }
@@ -132,6 +148,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/analytics': typeof AnalyticsRoute
   '/appointments': typeof AppointmentsRoute
+  '/demo': typeof DemoRoute
   '/leads': typeof LeadsRouteWithChildren
   '/login': typeof LoginRoute
   '/pipeline': typeof PipelineRoute
@@ -140,6 +157,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
+  '/widget': typeof WidgetRoute
   '/leads/$leadId': typeof LeadsLeadIdRoute
   '/leads/': typeof LeadsIndexRoute
 }
@@ -150,6 +168,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/appointments'
+    | '/demo'
     | '/leads'
     | '/login'
     | '/pipeline'
@@ -158,6 +177,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/team'
+    | '/widget'
     | '/leads/$leadId'
     | '/leads/'
   fileRoutesByTo: FileRoutesByTo
@@ -166,6 +186,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/appointments'
+    | '/demo'
     | '/login'
     | '/pipeline'
     | '/properties'
@@ -173,6 +194,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/team'
+    | '/widget'
     | '/leads/$leadId'
     | '/leads'
   id:
@@ -181,6 +203,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/appointments'
+    | '/demo'
     | '/leads'
     | '/login'
     | '/pipeline'
@@ -189,6 +212,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/team'
+    | '/widget'
     | '/leads/$leadId'
     | '/leads/'
   fileRoutesById: FileRoutesById
@@ -198,6 +222,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   AnalyticsRoute: typeof AnalyticsRoute
   AppointmentsRoute: typeof AppointmentsRoute
+  DemoRoute: typeof DemoRoute
   LeadsRoute: typeof LeadsRouteWithChildren
   LoginRoute: typeof LoginRoute
   PipelineRoute: typeof PipelineRoute
@@ -206,10 +231,18 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   TasksRoute: typeof TasksRoute
   TeamRoute: typeof TeamRoute
+  WidgetRoute: typeof WidgetRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/widget': {
+      id: '/widget'
+      path: '/widget'
+      fullPath: '/widget'
+      preLoaderRoute: typeof WidgetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/team': {
       id: '/team'
       path: '/team'
@@ -264,6 +297,13 @@ declare module '@tanstack/react-router' {
       path: '/leads'
       fullPath: '/leads'
       preLoaderRoute: typeof LeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/appointments': {
@@ -328,6 +368,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   AnalyticsRoute: AnalyticsRoute,
   AppointmentsRoute: AppointmentsRoute,
+  DemoRoute: DemoRoute,
   LeadsRoute: LeadsRouteWithChildren,
   LoginRoute: LoginRoute,
   PipelineRoute: PipelineRoute,
@@ -336,6 +377,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   TasksRoute: TasksRoute,
   TeamRoute: TeamRoute,
+  WidgetRoute: WidgetRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
