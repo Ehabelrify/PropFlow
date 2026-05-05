@@ -14,16 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      approval_requests: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          id: string
+          kind: Database["public"]["Enums"]["approval_kind"]
+          payload: Json
+          reason: string | null
+          requester_id: string
+          status: Database["public"]["Enums"]["approval_status"]
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["approval_kind"]
+          payload?: Json
+          reason?: string | null
+          requester_id: string
+          status?: Database["public"]["Enums"]["approval_status"]
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["approval_kind"]
+          payload?: Json
+          reason?: string | null
+          requester_id?: string
+          status?: Database["public"]["Enums"]["approval_status"]
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_color: string
+          created_at: string
+          email: string
+          id: string
+          initials: string
+          name: string
+          team_id: string | null
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_color?: string
+          created_at?: string
+          email: string
+          id: string
+          initials?: string
+          name?: string
+          team_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_color?: string
+          created_at?: string
+          email?: string
+          id?: string
+          initials?: string
+          name?: string
+          team_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_tenant: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "super_admin" | "manager" | "leader" | "agent"
+      approval_kind: "email" | "password" | "role"
+      approval_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +257,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["super_admin", "manager", "leader", "agent"],
+      approval_kind: ["email", "password", "role"],
+      approval_status: ["pending", "approved", "rejected"],
+    },
   },
 } as const
