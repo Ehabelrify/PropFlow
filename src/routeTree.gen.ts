@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PropertiesRouteImport } from './routes/properties'
 import { Route as PipelineRouteImport } from './routes/pipeline'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as AppointmentsRouteImport } from './routes/appointments'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
@@ -37,6 +39,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PropertiesRoute = PropertiesRouteImport.update({
   id: '/properties',
   path: '/properties',
@@ -45,6 +52,11 @@ const PropertiesRoute = PropertiesRouteImport.update({
 const PipelineRoute = PipelineRouteImport.update({
   id: '/pipeline',
   path: '/pipeline',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LeadsRoute = LeadsRouteImport.update({
@@ -89,8 +101,10 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AnalyticsRoute
   '/appointments': typeof AppointmentsRoute
   '/leads': typeof LeadsRouteWithChildren
+  '/login': typeof LoginRoute
   '/pipeline': typeof PipelineRoute
   '/properties': typeof PropertiesRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
@@ -102,8 +116,10 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/analytics': typeof AnalyticsRoute
   '/appointments': typeof AppointmentsRoute
+  '/login': typeof LoginRoute
   '/pipeline': typeof PipelineRoute
   '/properties': typeof PropertiesRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
@@ -117,8 +133,10 @@ export interface FileRoutesById {
   '/analytics': typeof AnalyticsRoute
   '/appointments': typeof AppointmentsRoute
   '/leads': typeof LeadsRouteWithChildren
+  '/login': typeof LoginRoute
   '/pipeline': typeof PipelineRoute
   '/properties': typeof PropertiesRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/team': typeof TeamRoute
@@ -133,8 +151,10 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/appointments'
     | '/leads'
+    | '/login'
     | '/pipeline'
     | '/properties'
+    | '/reset-password'
     | '/settings'
     | '/tasks'
     | '/team'
@@ -146,8 +166,10 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/appointments'
+    | '/login'
     | '/pipeline'
     | '/properties'
+    | '/reset-password'
     | '/settings'
     | '/tasks'
     | '/team'
@@ -160,8 +182,10 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/appointments'
     | '/leads'
+    | '/login'
     | '/pipeline'
     | '/properties'
+    | '/reset-password'
     | '/settings'
     | '/tasks'
     | '/team'
@@ -175,8 +199,10 @@ export interface RootRouteChildren {
   AnalyticsRoute: typeof AnalyticsRoute
   AppointmentsRoute: typeof AppointmentsRoute
   LeadsRoute: typeof LeadsRouteWithChildren
+  LoginRoute: typeof LoginRoute
   PipelineRoute: typeof PipelineRoute
   PropertiesRoute: typeof PropertiesRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   TasksRoute: typeof TasksRoute
   TeamRoute: typeof TeamRoute
@@ -205,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/properties': {
       id: '/properties'
       path: '/properties'
@@ -217,6 +250,13 @@ declare module '@tanstack/react-router' {
       path: '/pipeline'
       fullPath: '/pipeline'
       preLoaderRoute: typeof PipelineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/leads': {
@@ -289,8 +329,10 @@ const rootRouteChildren: RootRouteChildren = {
   AnalyticsRoute: AnalyticsRoute,
   AppointmentsRoute: AppointmentsRoute,
   LeadsRoute: LeadsRouteWithChildren,
+  LoginRoute: LoginRoute,
   PipelineRoute: PipelineRoute,
   PropertiesRoute: PropertiesRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   TasksRoute: TasksRoute,
   TeamRoute: TeamRoute,
