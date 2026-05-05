@@ -1,8 +1,19 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
 import { DataProvider } from "@/lib/data-store";
 import { AuthProvider } from "@/lib/auth-context";
+import appCss from "../styles.css?url";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60,
+      retry: 1,
+    },
+  },
+});
 
 export const Route = createRootRoute({
   head: () => ({
@@ -16,9 +27,9 @@ export const Route = createRootRoute({
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
-    links: [{ rel: "stylesheet", href: "/src/styles.css?url" }],
+    links: [{ rel: "stylesheet", href: appCss }],
   }),
-  shell: RootShell,
+  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });
@@ -34,14 +45,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <AuthProvider>
-      <DataProvider>
-        <RoleProvider>
-          <Outlet />
-          <Toaster />
-        </RoleProvider>
-      </DataProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <DataProvider>
+          <RoleProvider>
+            <Outlet />
+            <Toaster />
+          </RoleProvider>
+        </DataProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

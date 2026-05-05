@@ -12,6 +12,7 @@ export interface Profile {
   initials: string;
   tenant_id: string | null;
   team_id: string | null;
+  tenant_status?: string | null;
 }
 
 interface AuthCtx {
@@ -24,6 +25,7 @@ interface AuthCtx {
   hasRole: (r: AppRole) => boolean;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
+  tenantPending: boolean;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -39,7 +41,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
-    setProfile((p as Profile) ?? null);
+    let tenantStatus: string | null = null;
+    if ((p as Profile)?.tenant_id) {
+      const { data: t } = await supabase.from("tenants").select("status").eq("id", (p as Profile).tenant_id).maybeSingle();
+      tenantStatus = t?.status ?? null;
+    }
+    setProfile({ ...(p as Profile), tenant_status: tenantStatus } ?? null);
     setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
   };
 
@@ -65,19 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session?.user) await loadProfile(session.user.id);
   };
 
-  const value: AuthCtx = {
-    session,
-    user: session?.user ?? null,
-    profile,
-    roles,
-    loading,
-    isAuthed: !!session,
-    hasRole: (r) => roles.includes(r),
-    refresh,
-    signOut: async () => {
-      await supabase.auth.signOut();
-    },
-  };
+    const value: AuthCtx = {
+      session,
+      user: session?.user ?? null,
+      profile,
+      roles,
+      loading,
+      isAuthed: !!session,
+      hasRole: (r) => roles.includes(r),
+      refresh,
+      signOut: async () => {
+        await supabase.auth.signOut();
+      },
+      tenantPending: profile?.tenant_status === "pending_approval" || profile?.tenant_status === "rejected",
+    };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

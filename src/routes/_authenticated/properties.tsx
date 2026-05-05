@@ -3,7 +3,7 @@ import { Building2, MapPin, Plus } from "lucide-react";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useStore } from "@/lib/data-store";
+import { useProperties } from "@/hooks/use-supabase";
 import { formatCurrency } from "@/lib/mock-data";
 import { NewPropertyDialog } from "@/components/crm/dialogs";
 
@@ -13,19 +13,19 @@ export const Route = createFileRoute("/_authenticated/properties")({
 });
 
 function PropertiesPage() {
-  const { properties } = useStore();
+  const { data: properties = [] } = useProperties();
 
   return (
     <div>
       <PageHeader
         title="Properties"
-        description={`${properties.length} listings in the catalog.`}
+        description={`${(properties as any[]).length} listings in the catalog.`}
         actions={<NewPropertyDialog trigger={<Button size="sm" className="bg-gradient-brand text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" /> Add property</Button>} />}
       />
       <div className="grid gap-4 p-6 sm:grid-cols-2 xl:grid-cols-3">
-        {properties.map(p => (
+        {(properties as any[]).map(p => (
           <Card key={p.id} className="overflow-hidden shadow-card group">
-            <img src={p.image} alt={p.title} className="h-44 w-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+            <img src={p.image ?? ""} alt={p.title} className="h-44 w-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
             <div className="p-4">
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">{p.type}</span>
@@ -42,7 +42,7 @@ function PropertiesPage() {
                   <span>{p.bedrooms} bed</span><span>·</span><span>{p.bathrooms} bath</span><span>·</span><span>{p.area}m²</span>
                 </div>
               )}
-              <p className="mt-3 text-lg font-bold text-primary">{formatCurrency(p.price)}</p>
+              <p className="mt-3 text-lg font-bold text-primary">{formatCurrency(Number(p.price))}</p>
             </div>
           </Card>
         ))}

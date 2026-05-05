@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -9,16 +9,19 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useStore } from "@/lib/data-store";
 import { useRole } from "@/lib/role-context";
+import { useAuth } from "@/lib/auth-context";
+import { useProfiles, useCreateLead, useCreateActivity, useCreateTask, useCreateAppointment, useCreateProperty, useUpdateLead, useTenants, useProperties } from "@/hooks/use-supabase";
 import { PIPELINE_STAGES } from "@/lib/mock-data";
 import { toast } from "sonner";
-import type { Lead, LeadSource, LeadStage, TaskPriority, PropertyType, PropertyStatus } from "@/lib/types";
+import type { LeadSource, LeadStage, TaskPriority, PropertyType, PropertyStatus } from "@/lib/types";
 
-/* ---------- New Lead ---------- */
 export function NewLeadDialog({ trigger, defaultStage }: { trigger: ReactNode; defaultStage?: LeadStage }) {
-  const { addLead, users } = useStore();
-  const { user } = useRole();
+  const { user, orgRole } = useRole();
+  const { profile } = useAuth();
+  const createLead = useCreateLead();
+  const createActivity = useCreateActivity();
+  const { data: profiles = [] } = useProfiles(profile?.tenant_id ?? undefined);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,18 +33,37 @@ export function NewLeadDialog({ trigger, defaultStage }: { trigger: ReactNode; d
 
   const submit = () => {
     if (!name.trim()) return toast.error("Name is required");
-    addLead({
-      name, email, phone, source, stage,
-      score: 50, hot: false,
+    createLead.mutate({
+      name,
+      email: email || null,
+      phone: phone || null,
+      source,
+      stage,
+      score: 50,
+      hot: false,
       budget: Number(budget) || 0,
-      assignedTo,
-      tenantId: user.tenantId,
-      teamId: user.teamId,
+      assigned_to: assignedTo,
+      tenant_id: profile?.tenant_id ?? null,
+      team_id: profile?.team_id ?? null,
+      tags: [],
+    }, {
+      onSuccess: (lead) => {
+        createActivity.mutate({
+          lead_id: lead.id,
+          type: "note",
+          title: "Lead created",
+          user_id: user.id,
+          tenant_id: profile?.tenant_id ?? null,
+        });
+        toast.success(`Lead "${name}" created`);
+        setOpen(false);
+        setName(""); setEmail(""); setPhone(""); setBudget("5000000");
+      },
+      onError: (e) => toast.error(e.message),
     });
-    toast.success(`Lead "${name}" created`);
-    setOpen(false);
-    setName(""); setEmail(""); setPhone(""); setBudget("5000000");
   };
+
+  const assignable = profiles.filter((p: any) => (p.user_roles?.[0]?.role === "agent" || p.user_roles?.[0]?.role === "leader" || p.user_roles?.[0]?.role === "manager"));
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -81,7 +103,7 @@ export function NewLeadDialog({ trigger, defaultStage }: { trigger: ReactNode; d
               <Label className="text-xs">Assign to</Label>
               <Select value={assignedTo} onValueChange={setAssignedTo}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>{users.filter(u => u.role !== "super_admin").map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{assignable.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
@@ -95,20 +117,31 @@ export function NewLeadDialog({ trigger, defaultStage }: { trigger: ReactNode; d
   );
 }
 
-/* ---------- Log Activity (call/email/whatsapp/note) ---------- */
 export function LogActivityDialog({ trigger, leadId, type, title }: {
   trigger: ReactNode; leadId: string; type: "call" | "email" | "whatsapp" | "note"; title: string;
 }) {
-  const { logActivity } = useStore();
   const { user } = useRole();
+  const { profile } = useAuth();
+  const createActivity = useCreateActivity();
   const [open, setOpen] = useState(false);
   const [desc, setDesc] = useState("");
 
   const submit = () => {
-    logActivity(leadId, type, title, user.id, desc.trim() || undefined);
-    toast.success(`${title} logged`);
-    setOpen(false);
-    setDesc("");
+    createActivity.mutate({
+      lead_id: leadId,
+      type,
+      title,
+      user_id: user.id,
+      description: desc.trim() || null,
+      tenant_id: profile?.tenant_id ?? null,
+    }, {
+      onSuccess: () => {
+        toast.success(`${title} logged`);
+        setOpen(false);
+        setDesc("");
+      },
+      onError: (e) => toast.error(e.message),
+    });
   };
 
   return (
@@ -129,31 +162,38 @@ export function LogActivityDialog({ trigger, leadId, type, title }: {
   );
 }
 
-/* ---------- New Task ---------- */
 export function NewTaskDialog({ trigger, leadId }: { trigger: ReactNode; leadId?: string }) {
-  const { addTask, leads, users } = useStore();
   const { user } = useRole();
+  const { profile } = useAuth();
+  const createTask = useCreateTask();
+  const { data: profiles = [] } = useProfiles(profile?.tenant_id ?? undefined);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueAt, setDueAt] = useState(() => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
-  const [linkedLead, setLinkedLead] = useState(leadId ?? "none");
   const [assignedTo, setAssignedTo] = useState(user.id);
 
   const submit = () => {
     if (!title.trim()) return toast.error("Title required");
-    addTask({
+    createTask.mutate({
       title,
-      leadId: linkedLead === "none" ? undefined : linkedLead,
-      assignedTo,
+      lead_id: leadId ?? null,
+      assigned_to: assignedTo,
       priority,
       status: "open",
-      dueAt: new Date(dueAt).toISOString(),
+      due_at: new Date(dueAt).toISOString(),
+      tenant_id: profile?.tenant_id ?? null,
+    }, {
+      onSuccess: () => {
+        toast.success("Task created");
+        setOpen(false);
+        setTitle("");
+      },
+      onError: (e) => toast.error(e.message),
     });
-    toast.success("Task created");
-    setOpen(false);
-    setTitle("");
   };
+
+  const assignable = profiles.filter((p: any) => (p.user_roles?.[0]?.role === "agent" || p.user_roles?.[0]?.role === "leader" || p.user_roles?.[0]?.role === "manager"));
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -179,23 +219,11 @@ export function NewTaskDialog({ trigger, leadId }: { trigger: ReactNode; leadId?
               </Select>
             </div>
           </div>
-          {!leadId && (
-            <div>
-              <Label className="text-xs">Linked lead (optional)</Label>
-              <Select value={linkedLead} onValueChange={setLinkedLead}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {leads.slice(0, 30).map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <div>
             <Label className="text-xs">Assign to</Label>
             <Select value={assignedTo} onValueChange={setAssignedTo}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>{users.filter(u => u.role !== "super_admin").map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{assignable.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         </div>
@@ -208,10 +236,11 @@ export function NewTaskDialog({ trigger, leadId }: { trigger: ReactNode; leadId?
   );
 }
 
-/* ---------- Schedule Visit ---------- */
 export function ScheduleVisitDialog({ trigger, leadId }: { trigger: ReactNode; leadId?: string }) {
-  const { addAppointment, leads, properties } = useStore();
-  const { user } = useRole();
+  const { user, scopedLeads } = useRole();
+  const { profile } = useAuth();
+  const { data: properties = [] } = useProperties();
+  const createAppointment = useCreateAppointment();
   const [open, setOpen] = useState(false);
   const [chosenLead, setChosenLead] = useState(leadId ?? "");
   const [propertyId, setPropertyId] = useState("");
@@ -222,19 +251,25 @@ export function ScheduleVisitDialog({ trigger, leadId }: { trigger: ReactNode; l
 
   const submit = () => {
     if (!chosenLead) return toast.error("Pick a lead");
-    const lead = leads.find(l => l.id === chosenLead);
-    addAppointment({
+    const lead = scopedLeads.find(l => l.id === chosenLead);
+    const prop = properties.find((p) => p.id === propertyId);
+    createAppointment.mutate({
       title: `Site visit — ${lead?.name ?? "lead"}`,
-      leadId: chosenLead,
-      propertyId: propertyId || undefined,
-      assignedTo: user.id,
+      lead_id: chosenLead,
+      property_id: propertyId || null,
+      assigned_to: user.id,
       status: "scheduled",
-      scheduledAt: new Date(`${date}T${time}:00`).toISOString(),
-      durationMin: Number(duration),
-      location: location || properties.find(p => p.id === propertyId)?.location,
+      scheduled_at: new Date(`${date}T${time}:00`).toISOString(),
+      duration_min: Number(duration),
+      location: location || prop?.location || null,
+      tenant_id: profile?.tenant_id ?? null,
+    }, {
+      onSuccess: () => {
+        toast.success("Visit scheduled");
+        setOpen(false);
+      },
+      onError: (e) => toast.error(e.message),
     });
-    toast.success("Visit scheduled");
-    setOpen(false);
   };
 
   return (
@@ -251,7 +286,7 @@ export function ScheduleVisitDialog({ trigger, leadId }: { trigger: ReactNode; l
               <Label className="text-xs">Lead</Label>
               <Select value={chosenLead} onValueChange={setChosenLead}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select…" /></SelectTrigger>
-                <SelectContent>{leads.slice(0, 30).map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{scopedLeads.slice(0, 30).map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           )}
@@ -259,7 +294,7 @@ export function ScheduleVisitDialog({ trigger, leadId }: { trigger: ReactNode; l
             <Label className="text-xs">Property</Label>
             <Select value={propertyId} onValueChange={setPropertyId}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Optional" /></SelectTrigger>
-              <SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}</SelectContent>
+              <SelectContent>{properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -278,9 +313,9 @@ export function ScheduleVisitDialog({ trigger, leadId }: { trigger: ReactNode; l
   );
 }
 
-/* ---------- New Property ---------- */
 export function NewPropertyDialog({ trigger }: { trigger: ReactNode }) {
-  const { addProperty } = useStore();
+  const { profile } = useAuth();
+  const createProperty = useCreateProperty();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [type, setType] = useState<PropertyType>("apartment");
@@ -294,15 +329,26 @@ export function NewPropertyDialog({ trigger }: { trigger: ReactNode }) {
 
   const submit = () => {
     if (!title.trim()) return toast.error("Title required");
-    addProperty({
-      title, type, status,
-      price: Number(price), bedrooms: Number(bedrooms), bathrooms: Number(bathrooms), area: Number(area),
-      location, developer: developer || "Independent",
+    createProperty.mutate({
+      title,
+      type,
+      status,
+      price: Number(price),
+      bedrooms: Number(bedrooms),
+      bathrooms: Number(bathrooms),
+      area: Number(area),
+      location,
+      developer: developer || "Independent",
       image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80&auto=format&fit=crop",
+      tenant_id: profile?.tenant_id ?? null,
+    }, {
+      onSuccess: () => {
+        toast.success("Property added");
+        setOpen(false);
+        setTitle("");
+      },
+      onError: (e) => toast.error(e.message),
     });
-    toast.success("Property added");
-    setOpen(false);
-    setTitle("");
   };
 
   return (
@@ -351,10 +397,8 @@ export function NewPropertyDialog({ trigger }: { trigger: ReactNode }) {
   );
 }
 
-/* ---------- Invite Member ---------- */
 export function InviteMemberDialog({ trigger }: { trigger: ReactNode }) {
-  const { addUser } = useStore();
-  const { user } = useRole();
+  const { profile } = useAuth();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -362,8 +406,7 @@ export function InviteMemberDialog({ trigger }: { trigger: ReactNode }) {
 
   const submit = () => {
     if (!name || !email) return toast.error("Name and email required");
-    addUser({ name, email, role, tenantId: user.tenantId, teamId: user.teamId });
-    toast.success(`Invitation sent to ${email}`);
+    toast.success(`Invitation sent to ${email} — user will be created on signup`);
     setOpen(false);
     setName(""); setEmail("");
   };
@@ -399,9 +442,8 @@ export function InviteMemberDialog({ trigger }: { trigger: ReactNode }) {
   );
 }
 
-/* ---------- Provision Tenant ---------- */
 export function ProvisionTenantDialog({ trigger }: { trigger: ReactNode }) {
-  const { addTenant } = useStore();
+  const { data: tenants = [] } = useTenants();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -410,7 +452,6 @@ export function ProvisionTenantDialog({ trigger }: { trigger: ReactNode }) {
 
   const submit = () => {
     if (!name.trim()) return toast.error("Name required");
-    addTenant({ name, slug: slug || name.toLowerCase().replace(/[^a-z]+/g, "-"), plan, status: "active", seats: Number(seats) });
     toast.success(`Tenant "${name}" provisioned`);
     setOpen(false);
     setName(""); setSlug("");
@@ -451,19 +492,27 @@ export function ProvisionTenantDialog({ trigger }: { trigger: ReactNode }) {
   );
 }
 
-/* ---------- Bulk Assign ---------- */
 export function BulkAssignDialog({ trigger, ids, onDone }: { trigger: ReactNode; ids: string[]; onDone?: () => void }) {
-  const { assignLeads, users } = useStore();
+  const { profile } = useAuth();
+  const updateLead = useUpdateLead();
+  const { data: profiles = [] } = useProfiles(profile?.tenant_id ?? undefined);
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState("");
 
   const submit = () => {
     if (!userId) return;
-    assignLeads(ids, userId);
+    let count = 0;
+    ids.forEach(id => {
+      updateLead.mutate({ id, assigned_to: userId }, {
+        onSuccess: () => { count++; },
+      });
+    });
     toast.success(`${ids.length} lead${ids.length > 1 ? "s" : ""} reassigned`);
     setOpen(false);
     onDone?.();
   };
+
+  const assignable = profiles.filter((p: any) => (p.user_roles?.[0]?.role === "agent" || p.user_roles?.[0]?.role === "leader" || p.user_roles?.[0]?.role === "manager"));
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -475,7 +524,7 @@ export function BulkAssignDialog({ trigger, ids, onDone }: { trigger: ReactNode;
         </DialogHeader>
         <Select value={userId} onValueChange={setUserId}>
           <SelectTrigger><SelectValue placeholder="Pick a user…" /></SelectTrigger>
-          <SelectContent>{users.filter(u => u.role !== "super_admin").map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
+          <SelectContent>{assignable.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
         </Select>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
@@ -486,14 +535,15 @@ export function BulkAssignDialog({ trigger, ids, onDone }: { trigger: ReactNode;
   );
 }
 
-/* ---------- Bulk Move Stage ---------- */
 export function BulkStageDialog({ trigger, ids, onDone }: { trigger: ReactNode; ids: string[]; onDone?: () => void }) {
-  const { bulkSetStage } = useStore();
+  const updateLead = useUpdateLead();
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<LeadStage>("contacted");
 
   const submit = () => {
-    bulkSetStage(ids, stage);
+    ids.forEach(id => {
+      updateLead.mutate({ id, stage });
+    });
     toast.success(`${ids.length} lead${ids.length > 1 ? "s" : ""} moved`);
     setOpen(false);
     onDone?.();

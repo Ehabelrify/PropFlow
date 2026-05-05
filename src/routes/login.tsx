@@ -116,17 +116,18 @@ function LoginPage() {
           )}
 
           {mode === "signup" && (
-            <form onSubmit={onSignUp} className="mt-5 space-y-3">
-              <Field label="Full name" value={name} onChange={setName} />
-              <Field label="Email" type="email" value={email} onChange={setEmail} />
-              <Field label="Password" type="password" value={password} onChange={setPassword} hint="At least 8 characters" />
-              <Button type="submit" disabled={busy} className="w-full bg-gradient-brand text-primary-foreground">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}
-              </Button>
+            <div className="mt-5 space-y-3">
+              <p className="text-sm">
+                Creating a workspace? <Link to="/signup" className="text-primary hover:underline">Sign up as a manager</Link>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Managers can create workspaces and invite team members.
+                If you're joining an existing team, ask your manager for an invite link.
+              </p>
               <button type="button" className="block w-full text-center text-xs text-muted-foreground hover:text-foreground" onClick={() => setMode("signin")}>
-                Already have an account? Sign in
+                Back to sign in
               </button>
-            </form>
+            </div>
           )}
 
           {mode === "forgot" && (

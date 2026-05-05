@@ -1,16 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown, Users, Target, Calendar, Flame, ArrowRight, CheckCircle2, Clock } from "lucide-react";
-import { formatCurrency, PIPELINE_STAGES } from "@/lib/mock-data";
+import { PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
 import { useRole } from "@/lib/role-context";
-import { useStore } from "@/lib/data-store";
+import { useDashboardStats, useActivities, useAppointments, useTasks } from "@/hooks/use-supabase";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StageBadge } from "@/components/crm/StageBadge";
-import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";
-import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip } from "recharts";
-import { ClientChart } from "@/components/crm/ClientChart";
 import { format } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -23,33 +19,21 @@ export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
 });
 
-const trendData = Array.from({ length: 14 }).map((_, i) => ({
-  day: `D${i + 1}`,
-  leads: 8 + Math.round(Math.sin(i / 2) * 4 + i * 0.6),
-  won: Math.max(0, Math.round(2 + Math.sin(i / 3) * 2)),
-}));
-
-const sourceData = [
-  { source: "Widget", count: 38 },
-  { source: "Facebook", count: 27 },
-  { source: "Google", count: 21 },
-  { source: "Referral", count: 14 },
-  { source: "Manual", count: 9 },
-];
-
 function KpiCard({
   label, value, delta, deltaPositive = true, icon: Icon, accent,
-}: { label: string; value: string; delta: string; deltaPositive?: boolean; icon: any; accent: string }) {
+}: { label: string; value: string; delta?: string; deltaPositive?: boolean; icon: any; accent: string }) {
   return (
     <Card className="relative overflow-hidden p-5 shadow-card">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
           <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
-          <div className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${deltaPositive ? `text-success` : `text-destructive`}`}>
-            {deltaPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {delta} <span className="text-muted-foreground font-normal">vs last week</span>
-          </div>
+          {delta && (
+            <div className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${deltaPositive ? `text-success` : `text-destructive`}`}>
+              {deltaPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {delta} <span className="text-muted-foreground font-normal">vs last week</span>
+            </div>
+          )}
         </div>
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${accent}`}>
           <Icon className="h-5 w-5" />
@@ -61,22 +45,35 @@ function KpiCard({
 
 function Dashboard() {
   const { user, orgRole, scopedLeads, scopeLabel } = useRole();
-  const { tasks: TASKS, appointments: APPOINTMENTS, activities: ACTIVITIES, users: USERS_S } = useStore();
-  const leads = scopedLeads;
-  const totalLeads = leads.length;
-  const hotLeads = leads.filter(l => l.hot).length;
-  const wonValue = leads.filter(l => l.stage === "won").reduce((s, l) => s + l.budget, 0);
-  const leadIds = new Set(leads.map(l => l.id));
-  const upcoming = APPOINTMENTS.filter(a => a.status === "scheduled" && (orgRole === "super_admin" || leadIds.has(a.leadId) || a.assignedTo === user.id)).slice(0, 4);
-  const overdueTasks = TASKS.filter(t => t.status !== "done" && new Date(t.dueAt) < new Date() && (orgRole === "super_admin" || (t.leadId && leadIds.has(t.leadId)) || t.assignedTo === user.id));
-  const recentActivity = ACTIVITIES.filter(a => orgRole === "super_admin" || leadIds.has(a.leadId)).slice(0, 6);
-  const getLead = (id: string) => leads.find(l => l.id === id);
-  const getUser = (id: string) => USERS_S.find(u => u.id === id);
+  const { data: stats, isLoading } = useDashboardStats();
+  const { data: activities = [] } = useActivities();
+  const { data: appointments = [] } = useAppointments({ status: "scheduled" });
+  const { data: tasks = [] } = useTasks({ status: "open" });
 
+  const leads = scopedLeads;
+  const totalLeads = stats?.totalLeads ?? leads.length;
+  const hotLeads = leads.filter(l => l.hot).length;
+  const wonValue = stats?.wonRevenue ?? leads.filter(l => l.stage === "won").reduce((s, l) => s + l.budget, 0);
+  const pipelineValue = stats?.pipelineValue ?? leads.reduce((s, l) => s + l.budget, 0);
+  const leadIds = new Set(leads.map(l => l.id));
+  const upcoming = (appointments ?? []).filter(a => a.status === "scheduled" && (orgRole === "super_admin" || leadIds.has(a.lead_id) || a.assigned_to === user.id)).slice(0, 4);
+  const overdueTasks = (tasks ?? []).filter(t => t.status !== "done" && new Date(t.due_at) < new Date() && (orgRole === "super_admin" || (t.lead_id && leadIds.has(t.lead_id)) || t.assigned_to === user.id));
+  const recentActivity = (activities ?? []).filter(a => orgRole === "super_admin" || leadIds.has(a.lead_id)).slice(0, 6);
+  const getLead = (id: string) => leads.find(l => l.id === id);
+
+  const byStage = stats?.byStage ?? {};
   const stageBreakdown = PIPELINE_STAGES.map(s => ({
     ...s,
-    count: leads.filter(l => l.stage === s.id).length,
+    count: byStage[s.id] ?? leads.filter(l => l.stage === s.id).length,
   }));
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading dashboard...</div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -93,10 +90,10 @@ function Dashboard() {
 
       <div className="space-y-6 p-6">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Total leads" value={String(totalLeads)} delta="+12.4%" icon={Users} accent="bg-primary-soft text-primary" />
-          <KpiCard label="Hot leads" value={String(hotLeads)} delta="+3" icon={Flame} accent="bg-hot/10 text-hot" />
-          <KpiCard label="Pipeline value" value={formatCurrency(leads.reduce((s,l) => s + l.budget, 0))} delta="+8.2%" icon={Target} accent="bg-info/10 text-info" />
-          <KpiCard label="Won this month" value={formatCurrency(wonValue)} delta="-1.4%" deltaPositive={false} icon={TrendingUp} accent="bg-success/10 text-success" />
+          <KpiCard label="Total leads" value={String(totalLeads)} icon={Users} accent="bg-primary-soft text-primary" />
+          <KpiCard label="Hot leads" value={String(hotLeads)} delta={totalLeads > 0 ? `${Math.round((hotLeads / totalLeads) * 100)}%` : undefined} icon={Flame} accent="bg-hot/10 text-hot" />
+          <KpiCard label="Pipeline value" value={formatCurrency(pipelineValue)} icon={Target} accent="bg-info/10 text-info" />
+          <KpiCard label="Won this month" value={formatCurrency(wonValue)} icon={TrendingUp} accent="bg-success/10 text-success" />
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
@@ -104,30 +101,14 @@ function Dashboard() {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold">Lead flow</h3>
-                <p className="text-xs text-muted-foreground">New vs won — last 14 days</p>
+                <p className="text-xs text-muted-foreground">Activity overview</p>
               </div>
-              <span className="text-xs text-muted-foreground">Daily</span>
             </div>
-            <ClientChart height={224}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                  <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                  <Area type="monotone" dataKey="leads" stroke="var(--chart-1)" strokeWidth={2} fill="url(#g1)" />
-                  <Area type="monotone" dataKey="won" stroke="var(--chart-2)" strokeWidth={2} fill="url(#g2)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </ClientChart>
+            <div className="flex h-56 flex-col items-center justify-center text-center">
+              <Users className="h-10 w-10 text-muted-foreground/30" />
+              <p className="mt-3 text-sm font-medium text-muted-foreground">No historical data yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Charts will populate as you add leads and track activity</p>
+            </div>
           </Card>
 
           <Card className="p-5 shadow-card">
@@ -137,7 +118,7 @@ function Dashboard() {
             </div>
             <div className="space-y-2.5">
               {stageBreakdown.map(s => {
-                const pct = (s.count / totalLeads) * 100;
+                const pct = totalLeads > 0 ? (s.count / totalLeads) * 100 : 0;
                 return (
                   <div key={s.id}>
                     <div className="mb-1 flex items-center justify-between text-xs">
@@ -145,7 +126,7 @@ function Dashboard() {
                       <span className="text-muted-foreground">{s.count}</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-gradient-brand" style={{ width: "${pct}%" }} />
+                      <div className="h-full rounded-full bg-gradient-brand" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
@@ -162,23 +143,23 @@ function Dashboard() {
             </div>
             <ul className="space-y-3">
               {recentActivity.map(a => {
-                const lead = getLead(a.leadId);
-                const user = getUser(a.userId);
+                const lead = getLead(a.lead_id);
                 return (
                   <li key={a.id} className="flex items-start gap-3 rounded-lg p-2 hover:bg-muted/50">
-                    <UserAvatar userId={a.userId} size="md" />
+                    <UserAvatar userId={a.user_id} size="md" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm">
-                        <span className="font-medium">{user?.name}</span>{" "}
+                        <span className="font-medium">{(a as any).user?.name ?? "Unknown"}</span>{" "}
                         <span className="text-muted-foreground">— {a.title}</span>{" "}
                         {lead && <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="font-medium text-primary hover:underline">{lead.name}</Link>}
                       </p>
                       {a.description && <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{a.description}</p>}
-                      <p className="mt-1 text-[11px] text-muted-foreground">{format(new Date(a.createdAt), "MMM d, h:mm a")}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{format(new Date(a.created_at), "MMM d, h:mm a")}</p>
                     </div>
                   </li>
                 );
               })}
+              {recentActivity.length === 0 && <li className="text-sm text-muted-foreground">No recent activity</li>}
             </ul>
           </Card>
 
@@ -189,20 +170,21 @@ function Dashboard() {
               </div>
               <ul className="space-y-2.5">
                 {upcoming.map(a => {
-                  const lead = getLead(a.leadId);
+                  const lead = getLead(a.lead_id);
                   return (
                     <li key={a.id} className="flex items-center gap-3 rounded-md p-2 hover:bg-muted/50">
                       <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-md bg-primary-soft text-primary">
-                        <span className="text-[10px] font-medium uppercase">{format(new Date(a.scheduledAt), "MMM")}</span>
-                        <span className="text-sm font-bold leading-none">{format(new Date(a.scheduledAt), "d")}</span>
+                        <span className="text-[10px] font-medium uppercase">{format(new Date(a.scheduled_at), "MMM")}</span>
+                        <span className="text-sm font-bold leading-none">{format(new Date(a.scheduled_at), "d")}</span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{lead?.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{format(new Date(a.scheduledAt), "h:mm a")} · {a.location}</p>
+                        <p className="truncate text-sm font-medium">{lead?.name ?? "Unknown"}</p>
+                        <p className="truncate text-xs text-muted-foreground">{format(new Date(a.scheduled_at), "h:mm a")} · {a.location}</p>
                       </div>
                     </li>
                   );
                 })}
+                {upcoming.length === 0 && <li className="text-sm text-muted-foreground">No upcoming visits</li>}
               </ul>
             </Card>
             <Card className="p-5 shadow-card">
@@ -216,11 +198,11 @@ function Dashboard() {
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm">{t.title}</p>
-                      <p className="text-[11px] text-destructive">Due {format(new Date(t.dueAt), "MMM d")}</p>
+                      <p className="text-[11px] text-destructive">Due {format(new Date(t.due_at), "MMM d")}</p>
                     </div>
                   </li>
                 ))}
-                {overdueTasks.length === 0 && <p className="text-xs text-muted-foreground">All caught up 🎉</p>}
+                {overdueTasks.length === 0 && <li className="text-xs text-muted-foreground">All caught up 🎉</li>}
               </ul>
             </Card>
           </div>

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Copy, Code2, User, Mail, Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/lib/role-context";
-import { useStore } from "@/lib/data-store";
+import { useUpdateProfile, useTenants, useUpdateTenant } from "@/hooks/use-supabase";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -20,24 +20,37 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function SettingsPage() {
   const { profile, user: authUser, refresh } = useAuth();
   const { orgRole } = useRole();
-  const { tenants } = useStore();
+  const updateProfile = useUpdateProfile();
+  const { data: tenants = [] } = useTenants();
+  const updateTenant = useUpdateTenant();
 
-  // Profile editing state
+  const tenant = (tenants as any[]).find(t => t.id === profile?.tenant_id);
+
   const [editName, setEditName] = useState(profile?.name ?? "");
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Approval request state
   const [editEmail, setEditEmail] = useState(authUser?.email ?? "");
   const [requestReason, setRequestReason] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [approvalKind, setApprovalKind] = useState<"email" | "role" | "password">("email");
 
-  const [name, setName] = useState("Acme Realty Group");
-  const [slug, setSlug] = useState("acme-realty");
-  const [currency, setCurrency] = useState("EGP");
+  const [orgName, setOrgName] = useState(tenant?.name ?? "");
+  const [orgSlug, setOrgSlug] = useState(tenant?.slug ?? "");
+  const [savingOrg, setSavingOrg] = useState(false);
+
+  useEffect(() => {
+    if (profile?.name) setEditName(profile.name);
+  }, [profile?.name]);
+
+  useEffect(() => {
+    if (tenant) {
+      setOrgName(tenant.name);
+      setOrgSlug(tenant.slug);
+    }
+  }, [tenant]);
 
   const widgetSnippet = `<script src="https://cdn.propflow.app/widget.js"
-  data-tenant="${slug}"
+  data-tenant="${orgSlug}"
   data-key="pk_live_3f8a..."
   defer></script>`;
 
@@ -46,17 +59,37 @@ function SettingsPage() {
     toast.success("Snippet copied");
   };
 
-  const saveProfile = async () => {
+  const saveProfile = () => {
     if (!authUser) return;
-    setSavingProfile(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ name: editName.trim() || editName })
-      .eq("id", authUser.id);
-    setSavingProfile(false);
-    if (error) return toast.error(error.message);
-    toast.success("Profile updated");
-    await refresh();
+    updateProfile.mutate({
+      id: authUser.id,
+      name: editName.trim() || editName,
+    }, {
+      onSuccess: () => {
+        toast.success("Profile updated");
+        refresh();
+      },
+      onError: (e) => toast.error(e.message),
+    });
+  };
+
+  const saveOrg = () => {
+    if (!tenant) return;
+    setSavingOrg(true);
+    updateTenant.mutate({
+      id: tenant.id,
+      name: orgName.trim(),
+      slug: orgSlug.trim(),
+    }, {
+      onSuccess: () => {
+        toast.success("Organization saved");
+        setSavingOrg(false);
+      },
+      onError: (e) => {
+        toast.error(e.message);
+        setSavingOrg(false);
+      },
+    });
   };
 
   const requestApproval = async () => {
@@ -78,12 +111,15 @@ function SettingsPage() {
     setRequestReason("");
   };
 
+  const isSuperAdmin = orgRole === "super_admin";
+  const leadCount = tenant?.leads_count ?? 0;
+  const plan = tenant?.plan ?? "free";
+
   return (
     <div>
       <PageHeader title="Settings" description="Profile, workspace, branding, and integrations." />
       <div className="grid gap-4 p-6 lg:grid-cols-2">
 
-        {/* Profile Section */}
         <Card className="p-5 shadow-card">
           <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-primary" />
@@ -104,92 +140,102 @@ function SettingsPage() {
               <Label className="text-xs">Role</Label>
               <div className="mt-1 rounded-md border bg-muted/30 px-3 py-2 text-sm capitalize">{orgRole.replace("_", " ")}</div>
             </div>
-            <Button size="sm" className="bg-gradient-brand text-primary-foreground" disabled={savingProfile} onClick={saveProfile}>
-              {savingProfile ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            <Button size="sm" className="bg-gradient-brand text-primary-foreground" disabled={savingProfile || updateProfile.isPending} onClick={saveProfile}>
+              {updateProfile.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
               Save profile
             </Button>
           </div>
         </Card>
 
-        {/* Approval Request Section */}
-        <Card className="p-5 shadow-card">
-          <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-warning" />
-            <h3 className="text-sm font-semibold">Request Change</h3>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">Email, password, or role changes require manager approval.</p>
-          <div className="mt-4 space-y-3">
-            <div className="flex gap-1 rounded-lg border bg-muted/30 p-1">
-              {(["email", "password", "role"] as const).map(k => (
-                <button key={k} onClick={() => setApprovalKind(k)} className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium capitalize ${approvalKind === k ? `bg-primary text-primary-foreground` : `text-muted-foreground hover:bg-muted`}`}>
-                  {k}
-                </button>
-              ))}
+        {!isSuperAdmin && (
+          <>
+          <Card className="p-5 shadow-card">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-warning" />
+              <h3 className="text-sm font-semibold">Request Change</h3>
             </div>
+            <p className="mt-1 text-xs text-muted-foreground">Email, password, or role changes require manager approval.</p>
+            <div className="mt-4 space-y-3">
+              <div className="flex gap-1 rounded-lg border bg-muted/30 p-1">
+                {(["email", "password", "role"] as const).map(k => (
+                  <button key={k} onClick={() => setApprovalKind(k)} className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium capitalize ${approvalKind === k ? `bg-primary text-primary-foreground` : `text-muted-foreground hover:bg-muted`}`}>
+                    {k}
+                  </button>
+                ))}
+              </div>
 
-            {approvalKind === "email" && (
+              {approvalKind === "email" && (
+                <div>
+                  <Label className="text-xs">New email</Label>
+                  <div className="mt-1 flex gap-2">
+                    <Input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} className="flex-1" />
+                  </div>
+                </div>
+              )}
+              {approvalKind === "password" && (
+                <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning-foreground">
+                  A password reset link will be sent to your current email. Manager approval is required for security.
+                </div>
+              )}
+              {approvalKind === "role" && (
+                <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning-foreground">
+                  Role changes (e.g. agent → leader) require manager approval. Contact your manager directly for faster processing.
+                </div>
+              )}
+
               <div>
-                <Label className="text-xs">New email</Label>
-                <div className="mt-1 flex gap-2">
-                  <Input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} className="flex-1" />
+                <Label className="text-xs">Reason <span className="text-muted-foreground">(optional)</span></Label>
+                <Input value={requestReason} onChange={e => setRequestReason(e.target.value)} className="mt-1" placeholder="Why do you need this change?" />
+              </div>
+              <Button size="sm" variant="outline" disabled={requesting} onClick={requestApproval}>
+                {requesting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1.5 h-3.5 w-3.5" />}
+                Submit request
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="p-5 shadow-card">
+            <h3 className="text-sm font-semibold">Organization</h3>
+            <p className="text-xs text-muted-foreground">Public details for your tenant.</p>
+            <div className="mt-4 space-y-3">
+              <div><Label className="text-xs">Company name</Label><Input value={orgName} onChange={e => setOrgName(e.target.value)} className="mt-1" placeholder="Your company" /></div>
+              <div><Label className="text-xs">Workspace URL</Label><Input value={orgSlug} onChange={e => setOrgSlug(e.target.value)} className="mt-1" placeholder="your-slug" /></div>
+              <Button size="sm" className="bg-gradient-brand text-primary-foreground" disabled={savingOrg || updateTenant.isPending} onClick={saveOrg}>
+                {updateTenant.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                Save changes
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="p-5 shadow-card">
+            <h3 className="text-sm font-semibold flex items-center gap-2"><Code2 className="h-4 w-4" /> Embed widget</h3>
+            <p className="text-xs text-muted-foreground">Drop this snippet on your website to capture leads.</p>
+            <pre className="mt-3 overflow-x-auto rounded-md bg-muted p-3 text-[11px] leading-relaxed">{widgetSnippet}</pre>
+            <Button size="sm" variant="outline" className="mt-3" onClick={copy}><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy snippet</Button>
+          </Card>
+
+          {tenant && (
+            <Card className="p-5 shadow-card lg:col-span-2">
+              <h3 className="text-sm font-semibold">Subscription</h3>
+              <p className="text-xs text-muted-foreground capitalize">You're on the {plan} plan.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Leads</p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums">{leadCount.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Agents</p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums">{tenant.seats}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Status</p>
+                  <p className="mt-1 text-sm font-semibold capitalize">{tenant.status}</p>
                 </div>
               </div>
-            )}
-            {approvalKind === "password" && (
-              <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning-foreground">
-                A password reset link will be sent to your current email. Manager approval is required for security.
-              </div>
-            )}
-            {approvalKind === "role" && (
-              <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning-foreground">
-                Role changes (e.g. agent → leader) require manager approval. Contact your manager directly for faster processing.
-              </div>
-            )}
-
-            <div>
-              <Label className="text-xs">Reason <span className="text-muted-foreground">(optional)</span></Label>
-              <Input value={requestReason} onChange={e => setRequestReason(e.target.value)} className="mt-1" placeholder="Why do you need this change?" />
-            </div>
-            <Button size="sm" variant="outline" disabled={requesting} onClick={requestApproval}>
-              {requesting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1.5 h-3.5 w-3.5" />}
-              Submit request
-            </Button>
-          </div>
-        </Card>
-
-        {/* Organization Section */}
-        <Card className="p-5 shadow-card">
-          <h3 className="text-sm font-semibold">Organization</h3>
-          <p className="text-xs text-muted-foreground">Public details for your tenant.</p>
-          <div className="mt-4 space-y-3">
-            <div><Label className="text-xs">Company name</Label><Input value={name} onChange={e => setName(e.target.value)} className="mt-1" /></div>
-            <div><Label className="text-xs">Workspace URL</Label><Input value={slug} onChange={e => setSlug(e.target.value)} className="mt-1" /></div>
-            <div><Label className="text-xs">Default currency</Label><Input value={currency} onChange={e => setCurrency(e.target.value)} className="mt-1" /></div>
-            <Button size="sm" className="bg-gradient-brand text-primary-foreground" onClick={() => toast.success("Settings saved")}>Save changes</Button>
-          </div>
-        </Card>
-
-        {/* Embed widget Section */}
-        <Card className="p-5 shadow-card">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Code2 className="h-4 w-4" /> Embed widget</h3>
-          <p className="text-xs text-muted-foreground">Drop this snippet on your website to capture leads.</p>
-          <pre className="mt-3 overflow-x-auto rounded-md bg-muted p-3 text-[11px] leading-relaxed">{widgetSnippet}</pre>
-          <Button size="sm" variant="outline" className="mt-3" onClick={copy}><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy snippet</Button>
-        </Card>
-
-        {/* Subscription Section */}
-        <Card className="p-5 shadow-card lg:col-span-2">
-          <h3 className="text-sm font-semibold">Subscription</h3>
-          <p className="text-xs text-muted-foreground">You're on the Professional plan.</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {[{ k: "Leads", v: "152 / 5,000" }, { k: "Agents", v: "5 / 25" }, { k: "Storage", v: "1.2 / 50 GB" }].map(s => (
-              <div key={s.k} className="rounded-lg border bg-muted/30 p-3">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{s.k}</p>
-                <p className="mt-1 text-sm font-semibold tabular-nums">{s.v}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
+            </Card>
+          )}
+          </>
+        )}
       </div>
     </div>
   );

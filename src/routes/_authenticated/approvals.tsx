@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/lib/role-context";
-import { supabase } from "@/integrations/supabase/client";
+import { useApprovals, useDecideApproval } from "@/hooks/use-supabase";
 import { toast } from "sonner";
 import { format, formatDistanceToNow } from "date-fns";
 import { UserAvatar } from "@/components/crm/Avatar";
@@ -38,45 +38,27 @@ function ApprovalsPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
 
-  // Fetch approval requests
-  const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: requests = [], isLoading: loading } = useApprovals({ status: filter === "all" ? undefined : filter });
+  const decideApproval = useDecideApproval();
 
-  useState(() => {
-    (async () => {
-      const { data, error } = await supabase
-        .from("approval_requests")
-        .select("*, requester:profiles!approval_requests_requester_id_fkey(name, avatar_color, initials)")
-        .eq("tenant_id", profile?.tenant_id ?? "")
-        .order("created_at", { ascending: false });
-      if (!error && data) setRequests(data);
-      setLoading(false);
-    })();
-  });
-
-  const filtered = requests.filter(r => {
-    if (filter !== "all" && r.status !== filter) return false;
-    return true;
-  });
-
-  const pendingCount = requests.filter(r => r.status === "pending").length;
+  const pendingCount = (requests as any[]).filter((r: any) => r.status === "pending").length;
 
   const decide = async (id: string, status: "approved" | "rejected") => {
     if (!profile) return;
     setProcessing(id);
-    const { error } = await supabase
-      .from("approval_requests")
-      .update({ status, decided_by: profile.id, decided_at: new Date().toISOString(), decision_note: note[id] || null })
-      .eq("id", id);
-    setProcessing(null);
-    if (error) return toast.error(error.message);
-    toast.success(`Request ${status}`);
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status, decided_by: profile.id, decided_at: new Date().toISOString(), decision_note: note[id] || null } : r));
-
-    // Refresh auth if role was changed
-    if (status === "approved" && r.kind === "role") {
-      await refreshAuth();
-    }
+    decideApproval.mutate({ id, status, decision_note: note[id] || undefined }, {
+      onSuccess: async (data) => {
+        toast.success(`Request ${status}`);
+        if (status === "approved" && (data as any).kind === "role") {
+          await refreshAuth();
+        }
+        setProcessing(null);
+      },
+      onError: (e) => {
+        toast.error(e.message);
+        setProcessing(null);
+      },
+    });
   };
 
   if (!has("tenant.manage_team")) {
@@ -112,7 +94,7 @@ function ApprovalsPage() {
           </div>
         )}
 
-        {!loading && filtered.length === 0 && (
+        {!loading && (requests as any[]).length === 0 && (
           <Card className="p-12 text-center shadow-card">
             <Shield className="mx-auto h-8 w-8 text-muted-foreground/50" />
             <h3 className="mt-3 text-sm font-semibold">No approval requests</h3>
@@ -123,7 +105,7 @@ function ApprovalsPage() {
         )}
 
         <div className="space-y-3">
-          {filtered.map(r => {
+          {(requests as any[]).map(r => {
             const statusColor = r.status === "pending" ? "border-warning/30 bg-warning/5" :
               r.status === "approved" ? "border-success/30 bg-success/5" :
               "border-destructive/30 bg-destructive/5";

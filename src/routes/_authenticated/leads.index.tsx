@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Download, Plus, Phone, Mail, Trash2 } from "lucide-react";
+import { Search, Download, Plus, Phone, Mail, Trash2, Upload } from "lucide-react";
 import { PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
 import { useRole } from "@/lib/role-context";
-import { useStore } from "@/lib/data-store";
+import { useAuth } from "@/lib/auth-context";
+import { useDeleteLead, useProfiles } from "@/hooks/use-supabase";
 import type { LeadStage } from "@/lib/types";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { UserAvatar } from "@/components/crm/Avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatDistanceToNow } from "date-fns";
 import { NewLeadDialog, BulkAssignDialog, BulkStageDialog, LogActivityDialog } from "@/components/crm/dialogs";
+import { ImportCsvDialog } from "@/components/crm/ImportCsvDialog";
 import { exportLeadsCsv } from "@/lib/export-csv";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -22,6 +24,9 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/leads/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    q: typeof search.q === "string" ? search.q : "",
+  }),
   head: () => ({
     meta: [
       { title: "Leads — PropFlow CRM" },
@@ -33,23 +38,29 @@ export const Route = createFileRoute("/_authenticated/leads/")({
 
 function LeadsInbox() {
   const { scopedLeads, scopeLabel, has } = useRole();
-  const { users, deleteLeads } = useStore();
-  const [query, setQuery] = useState("");
+  const { profile } = useAuth();
+  const { q } = Route.useSearch();
+  const navigate = useNavigate();
+  const deleteLead = useDeleteLead();
+  const { data: profiles = [] } = useProfiles(profile?.tenant_id ?? undefined);
+  const [query, setQuery] = useState(q);
   const [stage, setStage] = useState<LeadStage | "all">("all");
   const [hotOnly, setHotOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const activeQuery = query || q;
 
   const filtered = useMemo(() => {
     return scopedLeads.filter(l => {
       if (stage !== "all" && l.stage !== stage) return false;
       if (hotOnly && !l.hot) return false;
-      if (query) {
-        const q = query.toLowerCase();
+      if (activeQuery) {
+        const q = activeQuery.toLowerCase();
         return l.name.toLowerCase().includes(q) || l.email.toLowerCase().includes(q) || l.phone.includes(q);
       }
       return true;
     });
-  }, [query, stage, hotOnly, scopedLeads]);
+  }, [activeQuery, stage, hotOnly, scopedLeads]);
 
   const toggle = (id: string) => {
     const n = new Set(selected);
@@ -63,10 +74,12 @@ function LeadsInbox() {
   const ids = Array.from(selected);
 
   const handleDelete = () => {
-    deleteLeads(ids);
+    ids.forEach(id => deleteLead.mutate(id));
     toast.success(`${ids.length} lead${ids.length > 1 ? `s` : ``} deleted`);
     setSelected(new Set());
   };
+
+  const getOwner = (userId: string) => profiles.find((p: any) => p.id === userId);
 
   return (
     <div>
@@ -75,6 +88,9 @@ function LeadsInbox() {
         description={`${filtered.length} of ${scopedLeads.length} leads · ${scopeLabel}`}
         actions={
           <>
+            <ImportCsvDialog trigger={
+              <Button variant="outline" size="sm"><Upload className="mr-1.5 h-4 w-4" /> Import CSV</Button>
+            } />
             <Button variant="outline" size="sm" onClick={() => exportLeadsCsv(filtered)}>
               <Download className="mr-1.5 h-4 w-4" /> Export
             </Button>
@@ -149,7 +165,7 @@ function LeadsInbox() {
             </thead>
             <tbody>
               {filtered.map(lead => {
-                const owner = users.find(u => u.id === lead.assignedTo);
+                const owner = getOwner(lead.assignedTo);
                 return (
                   <tr key={lead.id} className="group border-t transition-colors hover:bg-muted/30">
                     <td className="px-3 py-3"><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggle(lead.id)} /></td>

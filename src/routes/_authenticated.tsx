@@ -4,7 +4,10 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { useAuth } from "@/lib/auth-context";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clock } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
@@ -15,7 +18,7 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthLayout() {
-  const { isAuthed, loading } = useAuth();
+  const { isAuthed, loading, tenantPending, profile, refresh } = useAuth();
   const navigate = useNavigate();
   const path = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search });
@@ -29,10 +32,65 @@ function AuthLayout() {
     }
   }, [isAuthed, loading, navigate, path, search]);
 
+  // Check if tenant was just approved (polling)
+  useEffect(() => {
+    if (!tenantPending || !profile?.tenant_id) return;
+    const interval = setInterval(async () => {
+      const { data } = await supabase.from("tenants").select("status").eq("id", profile.tenant_id).maybeSingle();
+      if (data?.status === "active") {
+        await refresh();
+        window.location.reload();
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [tenantPending, profile?.tenant_id, refresh]);
+
   if (loading || !isAuthed) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (tenantPending) {
+    const isRejected = profile?.tenant_status === "rejected";
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted/40 px-4">
+        <Card className="max-w-md p-8 text-center shadow-card">
+          {isRejected ? (
+            <>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+                <Clock className="h-7 w-7 text-destructive" />
+              </div>
+              <h2 className="mt-4 text-lg font-semibold">Workspace not approved</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your workspace request was not approved. Please contact the platform administrator for more information.
+              </p>
+              <Button className="mt-5 bg-gradient-brand text-primary-foreground" onClick={() => navigate({ to: "/login" })}>
+                Back to sign in
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-warning/15">
+                <Clock className="h-7 w-7 text-warning" />
+              </div>
+              <h2 className="mt-4 text-lg font-semibold">Workspace pending approval</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your workspace <strong>{profile?.name}</strong> is awaiting approval from a platform administrator.
+                You'll get full access once approved.
+              </p>
+              <div className="mt-4 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                <p>Checking automatically every 10 seconds...</p>
+              </div>
+              <div className="mt-4 flex gap-2 justify-center">
+                <Button variant="outline" onClick={refresh}>Check now</Button>
+                <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button>
+              </div>
+            </>
+          )}
+        </Card>
       </div>
     );
   }
