@@ -33,6 +33,7 @@ function SettingsPage() {
   const [requestReason, setRequestReason] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [approvalKind, setApprovalKind] = useState<"email" | "role" | "password">("email");
+  const [requestedRole, setRequestedRole] = useState<"leader" | "manager">("leader");
 
   const [orgName, setOrgName] = useState(tenant?.name ?? "");
   const [orgSlug, setOrgSlug] = useState(tenant?.slug ?? "");
@@ -97,6 +98,7 @@ function SettingsPage() {
     setRequesting(true);
     const payload: Record<string, string> = {};
     if (approvalKind === "email") payload.new_email = editEmail;
+    if (approvalKind === "role") payload.new_role = requestedRole;
 
     const { error } = await supabase.from("approval_requests").insert({
       requester_id: authUser.id,
@@ -112,6 +114,8 @@ function SettingsPage() {
   };
 
   const isSuperAdmin = orgRole === "super_admin";
+  const isLeader = orgRole === "leader";
+  const isAgent = orgRole === "agent";
   const leadCount = tenant?.leads_count ?? 0;
   const plan = tenant?.plan ?? "free";
 
@@ -120,6 +124,7 @@ function SettingsPage() {
       <PageHeader title="Settings" description="Profile, workspace, branding, and integrations." />
       <div className="grid gap-4 p-6 lg:grid-cols-2">
 
+        {/* Profile Card - Visible to ALL roles */}
         <Card className="p-5 shadow-card">
           <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-primary" />
@@ -147,8 +152,8 @@ function SettingsPage() {
           </div>
         </Card>
 
+        {/* Request Change Card - Visible to Agent and Leader (not Super Admin) */}
         {!isSuperAdmin && (
-          <>
           <Card className="p-5 shadow-card">
             <div className="flex items-center gap-2">
               <Shield className="h-4 w-4 text-warning" />
@@ -178,8 +183,20 @@ function SettingsPage() {
                 </div>
               )}
               {approvalKind === "role" && (
-                <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning-foreground">
-                  Role changes (e.g. agent → leader) require manager approval. Contact your manager directly for faster processing.
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs">Request role</Label>
+                    <div className="mt-1 flex gap-1 rounded-lg border bg-muted/30 p-1">
+                      {(["leader", "manager"] as const).map(r => (
+                        <button key={r} onClick={() => setRequestedRole(r)} className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium capitalize ${requestedRole === r ? `bg-primary text-primary-foreground` : `text-muted-foreground hover:bg-muted`}`}>
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning-foreground">
+                    Role changes (e.g. {orgRole} → {requestedRole}) require manager approval. Contact your manager directly for faster processing.
+                  </div>
                 </div>
               )}
 
@@ -193,7 +210,10 @@ function SettingsPage() {
               </Button>
             </div>
           </Card>
+        )}
 
+        {/* Organization Card - Only Manager and Super Admin */}
+        {!isAgent && !isLeader && (
           <Card className="p-5 shadow-card">
             <h3 className="text-sm font-semibold">Organization</h3>
             <p className="text-xs text-muted-foreground">Public details for your tenant.</p>
@@ -206,35 +226,38 @@ function SettingsPage() {
               </Button>
             </div>
           </Card>
+        )}
 
+        {/* Widget Card - Leader and Manager/Super Admin (not Agent) */}
+        {!isAgent && (
           <Card className="p-5 shadow-card">
             <h3 className="text-sm font-semibold flex items-center gap-2"><Code2 className="h-4 w-4" /> Embed widget</h3>
             <p className="text-xs text-muted-foreground">Drop this snippet on your website to capture leads.</p>
             <pre className="mt-3 overflow-x-auto rounded-md bg-muted p-3 text-[11px] leading-relaxed">{widgetSnippet}</pre>
             <Button size="sm" variant="outline" className="mt-3" onClick={copy}><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy snippet</Button>
           </Card>
+        )}
 
-          {tenant && (
-            <Card className="p-5 shadow-card lg:col-span-2">
-              <h3 className="text-sm font-semibold">Subscription</h3>
-              <p className="text-xs text-muted-foreground capitalize">You're on the {plan} plan.</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Leads</p>
-                  <p className="mt-1 text-sm font-semibold tabular-nums">{leadCount.toLocaleString()}</p>
-                </div>
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Agents</p>
-                  <p className="mt-1 text-sm font-semibold tabular-nums">{tenant.seats}</p>
-                </div>
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Status</p>
-                  <p className="mt-1 text-sm font-semibold capitalize">{tenant.status}</p>
-                </div>
+        {/* Subscription Card - Only Manager and Super Admin */}
+        {!isAgent && !isLeader && tenant && (
+          <Card className="p-5 shadow-card lg:col-span-2">
+            <h3 className="text-sm font-semibold">Subscription</h3>
+            <p className="text-xs text-muted-foreground capitalize">You're on the {plan} plan.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Leads</p>
+                <p className="mt-1 text-sm font-semibold tabular-nums">{leadCount.toLocaleString()}</p>
               </div>
-            </Card>
-          )}
-          </>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Agents</p>
+                <p className="mt-1 text-sm font-semibold tabular-nums">{tenant.seats}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Status</p>
+                <p className="mt-1 text-sm font-semibold capitalize">{tenant.status}</p>
+              </div>
+            </div>
+          </Card>
         )}
       </div>
     </div>

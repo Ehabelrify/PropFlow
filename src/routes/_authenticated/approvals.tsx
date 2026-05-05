@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Shield, CheckCircle2, XCircle, Clock, Mail, Key, UserCog, Loader2 } from "lucide-react";
+import { Shield, CheckCircle2, XCircle, Clock, Mail, Key, UserCog, Loader2, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -138,6 +138,28 @@ function ApprovalsPage() {
                           Reason: {r.reason}
                         </p>
                       )}
+
+                      {/* Show current vs requested changes */}
+                      {r.kind === "email" && r.payload?.new_email && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+                          <span className="rounded bg-muted/50 px-2 py-0.5 text-muted-foreground">Current: {r.requester?.email ?? "N/A"}</span>
+                          <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                          <span className="rounded bg-primary/10 px-2 py-0.5 text-primary font-medium">New: {r.payload.new_email}</span>
+                        </div>
+                      )}
+                      {r.kind === "role" && r.payload?.new_role && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+                          <span className="rounded bg-muted/50 px-2 py-0.5 text-muted-foreground capitalize">Current: {r.requester_role ?? "agent"}</span>
+                          <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                          <span className="rounded bg-primary/10 px-2 py-0.5 text-primary font-medium capitalize">New: {r.payload.new_role}</span>
+                        </div>
+                      )}
+                      {r.kind === "password" && (
+                        <div className="mt-1.5 text-xs">
+                          <span className="rounded bg-warning/10 px-2 py-0.5 text-warning font-medium">Password reset requested for {r.requester?.email ?? "user"}</span>
+                        </div>
+                      )}
+
                       {r.decision_note && (
                         <p className="mt-1 text-xs text-muted-foreground">
                           Note: {r.decision_note}

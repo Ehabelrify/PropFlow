@@ -106,6 +106,23 @@ function LeadDetail() {
   const [reqEdits, setReqEdits] = useState(lead?.requirements || {});
   const [reqDialogOpen, setReqDialogOpen] = useState(false);
 
+  // Memoized timeline - MUST be before any conditional returns
+  const timeline = useMemo(() => {
+    const entries: TimelineEntry[] = [];
+    (activities || []).forEach(a => {
+      entries.push({ id: a.id, kind: "activity", sortDate: a.created_at, activity: a });
+    });
+    (tasks || []).forEach(t => {
+      entries.push({ id: `task-${t.id}`, kind: "task", sortDate: t.created_at, task: t });
+    });
+    (appointments || []).forEach(a => {
+      entries.push({ id: `appt-${a.id}`, kind: "appointment", sortDate: a.scheduled_at, appointment: a });
+    });
+    return entries.sort((a, b) => b.sortDate.localeCompare(a.sortDate));
+  }, [activities, tasks, appointments]);
+
+  const filtered = useMemo(() => timeline.filter(e => matchesFilter(e, filter)), [timeline, filter]);
+
   useEffect(() => {
     if (lead?.requirements) setReqEdits(lead.requirements);
   }, [lead?.requirements]);
@@ -115,25 +132,6 @@ function LeadDetail() {
 
   const owner = (profiles || []).find((p: any) => p.id === lead.assigned_to);
   const property = (properties || []).find(p => p.id === lead.property_interest);
-
-  const timeline = useMemo(() => {
-    const entries: TimelineEntry[] = [];
-    activities.forEach(a => {
-      entries.push({ id: a.id, kind: "activity", sortDate: a.created_at, activity: a });
-    });
-    (tasks || []).forEach(t => {
-      entries.push({ id: `task-${t.id}`, kind: "task", sortDate: t.created_at, task: t });
-    });
-    (appointments || []).forEach(a => {
-      entries.push({ id: `appt-${a.id}`, kind: "appointment", sortDate: a.scheduled_at, appointment: a });
-    });
-    (appointments as any[]).forEach(a => {
-      entries.push({ id: `appt-${a.id}`, kind: `appointment`, sortDate: a.scheduled_at, appointment: a });
-    });
-    return entries.sort((a, b) => b.sortDate.localeCompare(a.sortDate));
-  }, [activities, tasks, appointments]);
-
-  const filtered = useMemo(() => timeline.filter(e => matchesFilter(e, filter)), [timeline, filter]);
 
   const submitNote = () => {
     if (!noteText.trim()) return;

@@ -35,8 +35,10 @@ function TeamPage() {
   const { scopedLeads, orgRole } = useRole();
   const isSuperAdmin = orgRole === "super_admin";
   const isManager = orgRole === "manager";
+  const isLeader = orgRole === "leader";
+  const isAgent = orgRole === "agent";
 
-  // Super admin sees all; manager sees only their tenant
+  // Super admin sees all; manager sees only their tenant; leader sees all but can only invite to own team
   const tenantId = profile?.tenant_id ?? undefined;
   const { data: profiles = [] } = useProfiles(isSuperAdmin ? undefined : tenantId);
   const { data: teams = [] } = useTeams(isSuperAdmin ? undefined : tenantId);
@@ -51,7 +53,7 @@ function TeamPage() {
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [inviteDialog, setInviteDialog] = useState(false);
-  const [inviteTeamId, setInviteTeamId] = useState<string>(NO_TEAM_VALUE);
+  const [inviteTeamId, setInviteTeamId] = useState<string>(isLeader && profile?.team_id ? profile.team_id : NO_TEAM_VALUE);
   const [teamDialog, setTeamDialog] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -88,7 +90,10 @@ function TeamPage() {
   };
 
   const handleCreateInvite = () => {
-    if (!profile?.tenant_id) return;
+    if (!profile?.tenant_id) {
+      toast.error("No tenant assigned to your profile");
+      return;
+    }
     const teamId = inviteTeamId === NO_TEAM_VALUE ? null : inviteTeamId;
     createInvitation.mutate({
       tenant_id: profile.tenant_id,
@@ -97,7 +102,10 @@ function TeamPage() {
     }, {
       onSuccess: () => {
         toast.success("Invitation code created");
-        setInviteTeamId(NO_TEAM_VALUE);
+        setInviteTeamId(isLeader && profile?.team_id ? profile.team_id : NO_TEAM_VALUE);
+      },
+      onError: (error: any) => {
+        toast.error(`Failed to create invitation: ${error.message || "Unknown error"}`);
       },
     });
   };
@@ -159,7 +167,12 @@ function TeamPage() {
   };
 
   const handleInviteToTeam = (teamId: string) => {
-    setInviteTeamId(teamId);
+    // Leaders can only invite to their own team
+    if (isLeader) {
+      setInviteTeamId(profile?.team_id || NO_TEAM_VALUE);
+    } else {
+      setInviteTeamId(teamId);
+    }
     setInviteDialog(true);
   };
 
@@ -186,7 +199,8 @@ function TeamPage() {
               }`}>{ORG_ROLE_LABEL[role]}</span>
             </div>
           </div>
-          {isManager && role !== "super_admin" && (
+          {/* Only managers and super admins can edit users */}
+          {(isManager || isSuperAdmin) && role !== "super_admin" && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0"><UserCog className="h-3 w-3" /></Button>
@@ -215,24 +229,39 @@ function TeamPage() {
     <div>
       <PageHeader
         title="Team"
-        description={isSuperAdmin ? "All teams across all tenants." : "Manage members, teams, and invitation codes."}
+        description={
+          isSuperAdmin ? "All teams across all tenants." :
+          isAgent ? "View teams in your organization." :
+          isLeader ? "Manage your team members." :
+          "Manage members, teams, and invitation codes."
+        }
         actions={
           <div className="flex gap-2">
+            {/* Invite codes button - visible to managers and leaders */}
+            {(isManager || isLeader) && (
+              <Button size="sm" variant="outline" onClick={() => { 
+                // Leaders: pre-select their team
+                if (isLeader && profile?.team_id) {
+                  setInviteTeamId(profile.team_id);
+                } else {
+                  setInviteTeamId(NO_TEAM_VALUE); 
+                }
+                setInviteDialog(true); 
+              }}>
+                <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Invite codes
+              </Button>
+            )}
+            {/* New team button - only for managers */}
             {isManager && (
-              <>
-                <Button size="sm" variant="outline" onClick={() => { setInviteTeamId(NO_TEAM_VALUE); setInviteDialog(true); }}>
-                  <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Invite codes
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setTeamDialog(true)}>
-                  <Plus className="mr-1.5 h-3.5 w-3.5" /> New team
-                </Button>
-              </>
+              <Button size="sm" variant="outline" onClick={() => setTeamDialog(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> New team
+              </Button>
             )}
           </div>
         }
       />
 
-      {/* Seat usage - only for manager, not super admin */}
+      {/* Seat usage - only for manager, not super admin or agent/leader */}
       {isManager && (
         <Card className="mx-6 mb-4 p-4 shadow-card">
           <div className="flex items-center justify-between">
@@ -281,6 +310,10 @@ function TeamPage() {
             const displayName = isSuperAdmin && tenantName
               ? `${team.name} — ${tenantName}`
               : team.name;
+            
+            // Leaders can only see invite button for their own team
+            const canInviteToTeam = isManager || (isLeader && team.id === profile?.team_id);
+            
             return (
               <Card key={team.id} className="overflow-hidden shadow-card">
                 <div className="border-b bg-muted/30 px-5 py-3">
@@ -295,7 +328,7 @@ function TeamPage() {
                       <Badge variant="secondary" className="text-xs">
                         {teamProfiles.length} agent{teamProfiles.length !== 1 ? "s" : ""}
                       </Badge>
-                      {isManager && (
+                      {canInviteToTeam && (
                         <Button size="sm" variant="outline" onClick={() => handleInviteToTeam(team.id)}>
                           <KeyRound className="mr-1.5 h-3 w-3" /> Invite
                         </Button>
@@ -307,7 +340,7 @@ function TeamPage() {
                   {teamProfiles.length === 0 ? (
                     <div className="py-8 text-center">
                       <p className="text-sm text-muted-foreground mb-3">No agents assigned to this team yet.</p>
-                      {isManager && (
+                      {canInviteToTeam && (
                         <Button size="sm" variant="outline" onClick={() => handleInviteToTeam(team.id)}>
                           <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Invite agents
                         </Button>
@@ -324,8 +357,8 @@ function TeamPage() {
           })
         )}
 
-        {/* Unassigned agents */}
-        {profilesByTeam.unassigned?.length > 0 && (
+        {/* Unassigned agents - only visible to managers and super admins */}
+        {!isAgent && !isLeader && profilesByTeam.unassigned?.length > 0 && (
           <Card className="overflow-hidden shadow-card border-dashed">
             <div className="border-b bg-muted/30 px-5 py-3">
               <div className="flex items-center justify-between">
@@ -347,7 +380,7 @@ function TeamPage() {
         )}
       </div>
 
-      {/* Edit user dialog */}
+      {/* Edit user dialog - only for managers and super admins */}
       <Dialog open={!!editingUser} onOpenChange={open => !open && setEditingUser(null)}>
         <DialogContent>
           <DialogHeader>
@@ -388,23 +421,25 @@ function TeamPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create team dialog */}
-      <Dialog open={teamDialog} onOpenChange={setTeamDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New team</DialogTitle>
-            <DialogDescription>Create a team to organize agents.</DialogDescription>
-          </DialogHeader>
-          <div>
-            <Label className="text-xs">Team name</Label>
-            <Input value={newTeamName} onChange={e => setNewTeamName(e.target.value)} placeholder="Residential Sales" className="mt-1" />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setTeamDialog(false)}>Cancel</Button>
-            <Button onClick={handleCreateTeam} disabled={!newTeamName.trim()} className="bg-gradient-brand text-primary-foreground">Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Create team dialog - only for managers */}
+      {isManager && (
+        <Dialog open={teamDialog} onOpenChange={setTeamDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>New team</DialogTitle>
+              <DialogDescription>Create a team to organize agents.</DialogDescription>
+            </DialogHeader>
+            <div>
+              <Label className="text-xs">Team name</Label>
+              <Input value={newTeamName} onChange={e => setNewTeamName(e.target.value)} placeholder="Residential Sales" className="mt-1" />
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setTeamDialog(false)}>Cancel</Button>
+              <Button onClick={handleCreateTeam} disabled={!newTeamName.trim()} className="bg-gradient-brand text-primary-foreground">Create</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Invite codes dialog */}
       <Dialog open={inviteDialog} onOpenChange={setInviteDialog}>
@@ -414,24 +449,34 @@ function TeamPage() {
             <DialogDescription>Share codes with agents to join your workspace.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Team selection - disabled for leaders */}
             <div>
               <Label className="text-xs">Team (optional)</Label>
-              <Select value={inviteTeamId} onValueChange={setInviteTeamId}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="No specific team (tenant-wide)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_TEAM_VALUE}>No team (tenant-wide)</SelectItem>
-                  {(teams as any[]).map((t: any) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {inviteTeamId !== NO_TEAM_VALUE
-                  ? "Agent will be assigned to this team upon joining"
-                  : "Agent can be assigned to a team later by a manager"}
-              </p>
+              {isLeader ? (
+                <div className="mt-1 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  {(teams as any[]).find((t: any) => t.id === profile?.team_id)?.name || "Your team"}
+                  <p className="mt-1 text-[11px] text-muted-foreground">Agents will be assigned to your team</p>
+                </div>
+              ) : (
+                <Select value={inviteTeamId} onValueChange={setInviteTeamId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="No specific team (tenant-wide)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_TEAM_VALUE}>No team (tenant-wide)</SelectItem>
+                    {(teams as any[]).map((t: any) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {!isLeader && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {inviteTeamId !== NO_TEAM_VALUE
+                    ? "Agent will be assigned to this team upon joining"
+                    : "Agent can be assigned to a team later by a manager"}
+                </p>
+              )}
             </div>
             {(invitations as any[]).map((inv: any) => (
               <div key={inv.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
@@ -448,7 +493,8 @@ function TeamPage() {
                       {copiedCode === inv.code ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
                     </Button>
                   )}
-                  {inv.is_active && (
+                  {/* Only managers can revoke invitations */}
+                  {(isManager || isSuperAdmin) && inv.is_active && (
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRevoke(inv.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -461,7 +507,7 @@ function TeamPage() {
             )}
           </div>
           <DialogFooter>
-            <Button onClick={handleCreateInvite} disabled={atCapacity} className="bg-gradient-brand text-primary-foreground">
+            <Button onClick={handleCreateInvite} disabled={atCapacity || (isLeader && !profile?.team_id)} className="bg-gradient-brand text-primary-foreground">
               <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Generate code
             </Button>
           </DialogFooter>

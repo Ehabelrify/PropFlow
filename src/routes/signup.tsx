@@ -130,7 +130,10 @@ function SignupPage() {
       return toast.error("Signup failed — please try again");
     }
 
-    redeem.mutate(inviteCode.trim().toUpperCase(), {
+    redeem.mutate({
+      code: inviteCode.trim().toUpperCase(),
+      userId: authData.user.id
+    }, {
       onSuccess: () => {
         toast.success("Account created and joined workspace!");
         setStep("success");

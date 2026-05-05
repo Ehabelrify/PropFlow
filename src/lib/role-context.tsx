@@ -47,7 +47,7 @@ const ROLE_PERMS: Record<OrgRole, Permission[]> = {
   leader: [
     "team.view_team_leads", "team.reassign",
     "leads.create", "leads.update_own",
-    "analytics.view_team",
+    "analytics.view_team", "analytics.view_tenant",
   ],
   agent: [
     "leads.create", "leads.update_own",
@@ -134,20 +134,21 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
     let scopedLeads: Lead[] = [];
     let scopeLabel = "";
-
+ 
     if (orgRole === "super_admin") {
       scopedLeads = allLeads;
       scopeLabel = "Platform-wide";
-    } else if (orgRole === "manager") {
-      scopedLeads = allLeads.filter(l => l.tenantId === user.tenantId);
-      scopeLabel = "All teams";
-    } else if (orgRole === "leader") {
-      scopedLeads = allLeads.filter(l => l.tenantId === user.tenantId && (l.assignedTo === user.id || l.teamId === user.teamId));
-      const team = (dbTeams || []).find(t => t.id === user.teamId);
-      scopeLabel = team ? `${team.name} team` : "My team";
     } else {
-      scopedLeads = allLeads.filter(l => l.assignedTo === user.id);
-      scopeLabel = "Assigned to me";
+      // All tenant roles (agent, leader, manager) see ALL leads in their tenant
+      scopedLeads = allLeads.filter(l => l.tenantId === user.tenantId);
+      if (orgRole === "manager") {
+        scopeLabel = "All teams";
+      } else if (orgRole === "leader") {
+        const team = (dbTeams || []).find(t => t.id === user.teamId);
+        scopeLabel = team ? `${team.name} team` : "My team";
+      } else {
+        scopeLabel = "All leads";
+      }
     }
 
     return { user, orgRole, setUserId, has, scopedLeads, scopeLabel };

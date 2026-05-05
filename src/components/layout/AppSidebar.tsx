@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, Inbox, KanbanSquare, CheckSquare, Calendar, Building2, BarChart3, Users, Settings, Shield, ClipboardList,
+  LayoutDashboard, Inbox, KanbanSquare, CheckSquare, Calendar, Building2, BarChart3, Users, Settings, Shield, ClipboardList, UserCircle,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -23,9 +23,13 @@ const main: NavItem[] = [
   { title: "Analytics", url: "/analytics", icon: BarChart3, perm: "analytics.view_team" },
 ];
 
+const account: NavItem[] = [
+  { title: "Profile", url: "/settings", icon: UserCircle },
+  { title: "Team", url: "/team", icon: Users },
+];
+
 const team: NavItem[] = [
   { title: "Approvals", url: "/approvals", icon: ClipboardList, perm: "tenant.manage_team" },
-  { title: "Team", url: "/team", icon: Users, perm: "tenant.manage_team" },
   { title: "Settings", url: "/settings", icon: Settings, perm: "tenant.configure" },
 ];
 
@@ -43,8 +47,9 @@ export function AppSidebar() {
   const isActive = (url: string, exact?: boolean) =>
     exact ? path === url : path === url || path.startsWith(url + "/");
   const visible = (items: NavItem[]) => items.filter(i => !i.perm || has(i.perm));
-
+ 
   const mainItems = visible(main);
+  const accountItems = visible(account);
   const teamItems = visible(team);
   const platformItems = visible(platform);
 
@@ -81,6 +86,25 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {accountItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Account</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {accountItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+                      <Link to={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
         {teamItems.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Organization</SidebarGroupLabel>

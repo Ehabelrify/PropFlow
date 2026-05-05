@@ -53,6 +53,16 @@ export function useLead(id?: string) {
   });
 }
 
+// Helper to batch fetch profiles by IDs
+async function fetchProfilesByIds(ids: string[]) {
+  if (!ids.length) return new Map();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, name, email, initials, avatar_color")
+    .in("id", ids);
+  return new Map(data?.map(p => [p.id, p]) || []);
+}
+
 export function useCreateLead() {
   const qc = useQueryClient();
   return useMutation({
@@ -169,13 +179,31 @@ export function useTasks(filters?: {
   return useQuery({
     queryKey: ["tasks", filters],
     queryFn: async () => {
-      let q = supabase.from("tasks").select("*, assigned_user:profiles(name, initials, avatar_color), lead:leads(name, email)").order("due_at", { ascending: true });
+      let q = supabase.from("tasks").select("*").order("due_at", { ascending: true });
       if (filters?.assigned_to) q = q.eq("assigned_to", filters.assigned_to);
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.lead_id) q = q.eq("lead_id", filters.lead_id);
-      const { data, error } = await q;
+      const { data: tasks, error } = await q;
       if (error) throw error;
-      return data;
+      
+      // Fetch profiles and leads separately
+      if (tasks && tasks.length > 0) {
+        const userIds = [...new Set(tasks.map((t: any) => t.assigned_to).filter(Boolean))];
+        const leadIds = [...new Set(tasks.map((t: any) => t.lead_id).filter(Boolean))];
+        
+        const { data: profiles } = await supabase.from("profiles").select("id, name, initials, avatar_color").in("id", userIds);
+        const { data: leads } = await supabase.from("leads").select("id, name, email").in("id", leadIds);
+        
+        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+        const leadMap = new Map(leads?.map((l: any) => [l.id, l]) || []);
+        
+        tasks.forEach((t: any) => {
+          (t as any).assigned_user = profileMap.get(t.assigned_to) || null;
+          (t as any).lead = leadMap.get(t.lead_id) || null;
+        });
+      }
+      
+      return tasks;
     },
     enabled: !!(filters?.lead_id || filters?.assigned_to || filters?.status),
   });
@@ -228,13 +256,49 @@ export function useAppointments(filters?: {
   return useQuery({
     queryKey: ["appointments", filters],
     queryFn: async () => {
-      let q = supabase.from("appointments").select("*, assigned_user:profiles(name, initials, avatar_color), lead:leads(name, email), property:properties(title)").order("scheduled_at", { ascending: true });
+      let q = supabase
+        .from("appointments")
+        .select("*")
+        .order("scheduled_at", { ascending: true });
       if (filters?.assigned_to) q = q.eq("assigned_to", filters.assigned_to);
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.lead_id) q = q.eq("lead_id", filters.lead_id);
-      const { data, error } = await q;
+      const { data: appointments, error } = await q;
       if (error) throw error;
-      return data;
+      
+      // Fetch profiles and leads separately
+      if (appointments && appointments.length > 0) {
+        const userIds = [...new Set(appointments.map((a: any) => a.assigned_to).filter(Boolean))];
+        const leadIds = [...new Set(appointments.map((a: any) => a.lead_id).filter(Boolean))];
+        const propertyIds = [...new Set(appointments.map((a: any) => a.property_id).filter(Boolean))];
+        
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, name, initials, avatar_color")
+          .in("id", userIds);
+        
+        const { data: leads } = await supabase
+          .from("leads")
+          .select("id, name, email")
+          .in("id", leadIds);
+        
+        const { data: properties } = await supabase
+          .from("properties")
+          .select("id, title")
+          .in("id", propertyIds);
+        
+        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+        const leadMap = new Map(leads?.map((l: any) => [l.id, l]) || []);
+        const propertyMap = new Map(properties?.map((p: any) => [p.id, p]) || []);
+        
+        appointments.forEach((a: any) => {
+          (a as any).assigned_user = profileMap.get(a.assigned_to) || null;
+          (a as any).lead = leadMap.get(a.lead_id) || null;
+          (a as any).property = propertyMap.get(a.property_id) || null;
+        });
+      }
+      
+      return appointments;
     },
     enabled: !!(filters?.lead_id || filters?.assigned_to || filters?.status),
   });
@@ -283,11 +347,29 @@ export function useActivities(leadId?: string) {
   return useQuery({
     queryKey: ["activities", leadId],
     queryFn: async () => {
-      let q = supabase.from("activities").select("*, user:profiles(name, initials, avatar_color)").order("created_at", { ascending: false });
+      let q = supabase
+        .from("activities")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (leadId) q = q.eq("lead_id", leadId);
-      const { data, error } = await q;
+      const { data: activities, error } = await q;
       if (error) throw error;
-      return data;
+      
+      // Fetch user profiles separately
+      if (activities && activities.length > 0) {
+        const userIds = [...new Set(activities.map((a: any) => a.user_id))];
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, name, initials, avatar_color")
+          .in("id", userIds);
+        
+        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+        activities.forEach((a: any) => {
+          (a as any).user = profileMap.get(a.user_id) || null;
+        });
+      }
+      
+      return activities;
     },
     enabled: !!leadId,
   });
@@ -308,19 +390,47 @@ export function useCreateActivity() {
   });
 }
 
-// ========= APPROVALS =========
+  // ========= APPROVALS =========
 export function useApprovals(filters?: { status?: string }) {
   const { profile, hasRole } = useAuth();
   const isSuperAdmin = hasRole("super_admin");
   return useQuery({
     queryKey: ["approvals", filters],
     queryFn: async () => {
-      let q = supabase.from("approval_requests").select("*, requester:profiles(name, email), decider:profiles(name)").order("created_at", { ascending: false });
+      let q = supabase.from("approval_requests").select("*").order("created_at", { ascending: false });
       if (!isSuperAdmin && profile?.tenant_id) q = q.eq("tenant_id", profile.tenant_id);
       if (filters?.status) q = q.eq("status", filters.status);
-      const { data, error } = await q;
+      const { data: approvals, error } = await q;
       if (error) throw error;
-      return data;
+
+      // Fetch requester and decider profiles, plus requester roles
+      if (approvals && approvals.length > 0) {
+        const userIds = [
+          ...new Set([
+            ...approvals.map((a: any) => a.requester_id),
+            ...approvals.map((a: any) => a.decided_by).filter(Boolean)
+          ])
+        ];
+
+        const [
+          { data: profiles },
+          { data: roles }
+        ] = await Promise.all([
+          supabase.from("profiles").select("id, name, email").in("id", userIds),
+          supabase.from("user_roles").select("user_id, role").in("user_id", approvals.map((a: any) => a.requester_id))
+        ]);
+
+        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+        const roleMap = new Map(roles?.map((r: any) => [r.user_id, r.role]) || []);
+
+        approvals.forEach((a: any) => {
+          (a as any).requester = profileMap.get(a.requester_id) || null;
+          (a as any).decider = a.decided_by ? profileMap.get(a.decided_by) || null : null;
+          (a as any).requester_role = roleMap.get(a.requester_id) || "agent";
+        });
+      }
+
+      return approvals;
     },
   });
 }
@@ -347,12 +457,14 @@ export function useDecideApproval() {
         .from("approval_requests")
         .update({ status, decided_by: user!.id, decided_at: new Date().toISOString(), decision_note })
         .eq("id", id)
-        .select()
+        .select("*")
         .single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["approvals"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["approvals"] });
+    },
   });
 }
 
@@ -570,11 +682,12 @@ export function useCreateInvitation() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tenant_id, expires_in_hours = 168 }: { tenant_id: string; expires_in_hours?: number }) => {
+    mutationFn: async ({ tenant_id, team_id, expires_in_hours = 168 }: { tenant_id: string; team_id?: string | null; expires_in_hours?: number }) => {
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
       const expires_at = new Date(Date.now() + expires_in_hours * 3600000).toISOString();
       const { data, error } = await supabase.from("invitations").insert({
         tenant_id,
+        team_id: team_id || null,
         code,
         expires_at,
         is_active: true,
@@ -599,13 +712,12 @@ export function useRevokeInvitation() {
 }
 
 export function useRedeemInvitation() {
-  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (code: string) => {
+    mutationFn: async ({ code, userId }: { code: string; userId: string }) => {
       const { data, error } = await supabase.rpc("redeem_invitation", {
         _code: code,
-        _user_id: user!.id,
+        _user_id: userId,
       });
       if (error) throw error;
       return data;
