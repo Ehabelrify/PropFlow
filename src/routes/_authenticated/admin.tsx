@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/lib/role-context";
-import { useTenants, useApproveTenant } from "@/hooks/use-supabase";
+import { useTenants, useApproveTenant, usePlatformHealth } from "@/hooks/use-supabase";
 import { format } from "date-fns";
 import { ProvisionTenantDialog } from "@/components/crm/dialogs";
 import { EditTenantDialog } from "@/components/crm/EditTenantDialog";
@@ -24,6 +24,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminPage() {
   const { has } = useRole();
   const { data: tenants = [], isLoading } = useTenants();
+  const { data: health, isLoading: healthLoading } = usePlatformHealth();
   const updateTenant = useUpdateTenant();
   const approveTenant = useApproveTenant();
   const [processing, setProcessing] = useState<string | null>(null);
@@ -200,15 +201,48 @@ function AdminPage() {
         </Card>
 
         <Card className="p-5 shadow-card">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Server className="h-4 w-4" /> Platform health</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Server className="h-4 w-4" />
+            Platform health
+            {healthLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+          </h3>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {[{ k: "API uptime (30d)", v: "99.98%" }, { k: "Avg p95 latency", v: "184 ms" }, { k: "Background jobs", v: "12 / min" }].map(s => (
-              <div key={s.k} className="rounded-lg border bg-muted/30 p-3">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{s.k}</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">{s.v}</p>
+            {healthLoading ? (
+              <div className="col-span-3 flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
-            ))}
+            ) : (
+              <>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Health score</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">{health?.healthScore ?? 0}%</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Active tenants</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">{health?.activeTenants ?? 0} / {health?.totalTenants ?? 0}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">New leads (30d)</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">{health?.recentLeads ?? 0}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Tasks created (30d)</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">{health?.recentTasks ?? 0}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Appointments (30d)</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">{health?.recentAppts ?? 0}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Total leads</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">{(health?.totalLeads ?? 0).toLocaleString()}</p>
+                </div>
+              </>
+            )}
           </div>
+          {health && (
+            <p className="mt-2 text-[10px] text-muted-foreground">Last updated: {new Date(health.fetchedAt).toLocaleTimeString()}</p>
+          )}
         </Card>
       </div>
     </div>

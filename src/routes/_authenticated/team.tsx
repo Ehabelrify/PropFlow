@@ -133,7 +133,14 @@ function TeamPage() {
   };
 
   const handleCreateTeam = () => {
-    if (!newTeamName.trim() || !profile?.tenant_id) return;
+    if (!newTeamName.trim()) {
+      toast.error("Please enter a team name");
+      return;
+    }
+    if (!profile?.tenant_id) {
+      toast.error("No tenant assigned to your profile. Cannot create team.");
+      return;
+    }
     createTeam.mutate({
       id: `tm_${Date.now()}`,
       tenant_id: profile.tenant_id,
@@ -144,6 +151,9 @@ function TeamPage() {
         toast.success("Team created");
         setTeamDialog(false);
         setNewTeamName("");
+      },
+      onError: (error: any) => {
+        toast.error(`Failed to create team: ${error.message || "Unknown error"}`);
       },
     });
   };

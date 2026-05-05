@@ -361,24 +361,38 @@ export function useTeams(tenantId?: string) {
   return useQuery({
     queryKey: ["teams", tenantId],
     queryFn: async () => {
-      let q = supabase
+      // Fetch teams - RLS policy already filters by tenant_id or super_admin role
+      const { data: teams, error } = await supabase
         .from("teams")
-        .select(`
-          *,
-          leader:profiles!leader_id(name, initials, avatar_color),
-          tenant:tenants(name)
-        `)
+        .select(`*`)
         .order("name");
-      if (tenantId) q = q.eq("tenant_id", tenantId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data;
+      if (error) {
+        console.error("Error fetching teams:", error);
+        throw error;
+      }
+      
+      // Fetch leader profiles separately
+      if (teams && teams.length > 0) {
+        const leaderIds = [...new Set(teams.map(t => t.leader_id).filter(Boolean))];
+        if (leaderIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, name, initials, avatar_color")
+            .in("id", leaderIds);
+          
+          const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+          teams.forEach(team => {
+            (team as any).leader = profileMap.get(team.leader_id) || null;
+          });
+        }
+      }
+      
+      return teams;
     },
   });
 }
 
 export function useCreateTeam() {
-  const { profile } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: TeamInsert) => {
@@ -386,7 +400,10 @@ export function useCreateTeam() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["teams", profile?.tenant_id] }),
+    onSuccess: () => {
+      // Invalidate all team queries regardless of tenant_id
+      qc.invalidateQueries({ queryKey: ["teams"] });
+    },
   });
 }
 
@@ -462,11 +479,26 @@ export function useProfiles(tenantId?: string) {
   return useQuery({
     queryKey: ["profiles", tenantId],
     queryFn: async () => {
-      let q = supabase.from("profiles").select("*, user_roles(role)").order("name");
+      // Fetch profiles - RLS handles tenant filtering
+      let q = supabase.from("profiles").select("*").order("name");
       if (tenantId) q = q.eq("tenant_id", tenantId);
-      const { data, error } = await q;
+      const { data: profiles, error } = await q;
       if (error) throw error;
-      return data;
+      
+      // Fetch roles separately
+      if (profiles && profiles.length > 0) {
+        const { data: roles } = await supabase
+          .from("user_roles")
+          .select("user_id, role")
+          .in("user_id", profiles.map(p => p.id));
+        
+        const roleMap = new Map(roles?.map(r => [r.user_id, r.role]) || []);
+        profiles.forEach(p => {
+          (p as any).user_roles = [{ role: roleMap.get(p.id) || 'agent' }];
+        });
+      }
+      
+      return profiles;
     },
   });
 }
@@ -582,6 +614,57 @@ export function useRedeemInvitation() {
       qc.invalidateQueries({ queryKey: ["profiles"] });
       qc.invalidateQueries({ queryKey: ["teams"] });
     },
+  });
+}
+
+// ========= PLATFORM HEALTH =========
+export function usePlatformHealth() {
+  return useQuery({
+    queryKey: ["platform-health"],
+    queryFn: async () => {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      const [
+        tenantsRes,
+        activeTenantsRes,
+        recentLeadsRes,
+        recentTasksRes,
+        recentApptsRes,
+        totalLeadsRes,
+      ] = await Promise.all([
+        supabase.from("tenants").select("id, status, created_at", { count: "exact" }),
+        supabase.from("tenants").select("id", { count: "exact" }).eq("status", "active"),
+        supabase.from("leads").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
+        supabase.from("tasks").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
+        supabase.from("appointments").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
+        supabase.from("leads").select("id", { count: "exact" }),
+      ]);
+
+      if (tenantsRes.error) throw tenantsRes.error;
+
+      const totalTenants = tenantsRes.count ?? 0;
+      const activeTenants = activeTenantsRes.count ?? 0;
+      const recentLeads = recentLeadsRes.count ?? 0;
+      const recentTasks = recentTasksRes.count ?? 0;
+      const recentAppts = recentApptsRes.count ?? 0;
+      const totalLeads = totalLeadsRes.count ?? 0;
+
+      // Calculate a simple health score based on active tenants ratio
+      const healthScore = totalTenants > 0 ? Math.round((activeTenants / totalTenants) * 100) : 100;
+
+      return {
+        totalTenants,
+        activeTenants,
+        healthScore,
+        recentLeads,
+        recentTasks,
+        recentAppts,
+        totalLeads,
+        fetchedAt: new Date().toISOString(),
+      };
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
 }
 
