@@ -2,14 +2,13 @@ import { Search, Bell, Plus } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { RoleSwitcher } from "./RoleSwitcher";
-import { useRole } from "@/lib/role-context";
 import { NewLeadDialog } from "@/components/crm/dialogs";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useRole } from "@/lib/role-context";
 import { useStore } from "@/lib/data-store";
 import { toast } from "sonner";
 
@@ -34,7 +33,6 @@ export function Topbar() {
         />
       </form>
       <div className="ml-auto flex items-center gap-2">
-        <RoleSwitcher />
         <NotificationsButton />
         <NewLeadButton />
       </div>

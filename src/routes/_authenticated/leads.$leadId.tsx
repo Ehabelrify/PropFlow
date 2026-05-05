@@ -68,7 +68,7 @@ function appointmentStatusBadge(status: string) {
     cancelled: "bg-destructive/10 text-destructive",
     no_show: "bg-warning/15 text-warning-foreground",
   };
-  return <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ${map[status] ?? ""}`}>{status.replace("_", " ")}</span>;
+  return <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ${map[status] ?? ``}`}>{status.replace(`_`, ` `)}</span>;
 }
 
 function priorityDot(priority: string) {
@@ -76,7 +76,7 @@ function priorityDot(priority: string) {
   return <span className={`inline-block h-1.5 w-1.5 rounded-full ${c}`} />;
 }
 
-export const Route = createFileRoute("/leads/$leadId")({
+export const Route = createFileRoute("/_authenticated/leads/$leadId")({
   head: ({ params }) => ({
     meta: [
       { title: `Lead ${params.leadId} — PropFlow CRM` },
@@ -111,10 +111,10 @@ function LeadDetail() {
       entries.push({ id: a.id, kind: "activity", sortDate: a.createdAt, activity: a });
     });
     leadTasks.forEach(t => {
-      entries.push({ id: `task-${t.id}`, kind: "task", sortDate: t.createdAt, task: t });
+      entries.push({ id: `task-${t.id}`, kind: `task`, sortDate: t.createdAt, task: t });
     });
     leadAppts.forEach(a => {
-      entries.push({ id: `appt-${a.id}`, kind: "appointment", sortDate: a.scheduledAt, appointment: a });
+      entries.push({ id: `appt-${a.id}`, kind: `appointment`, sortDate: a.scheduledAt, appointment: a });
     });
     return entries.sort((a, b) => b.sortDate.localeCompare(a.sortDate));
   }, [activities, lead.id, leadTasks, leadAppts]);
@@ -172,7 +172,7 @@ function LeadDetail() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-semibold tracking-tight">{lead.name}</h1>
-                  <button onClick={() => updateLead(lead.id, { hot: !lead.hot })} className={`flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-medium uppercase tracking-wider transition-colors ${lead.hot ? "border-hot bg-hot/10 text-hot hover:bg-hot/20" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                  <button onClick={() => updateLead(lead.id, { hot: !lead.hot })} className={`flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-medium uppercase tracking-wider transition-colors ${lead.hot ? `border-hot bg-hot/10 text-hot hover:bg-hot/20` : `border-border text-muted-foreground hover:bg-muted`}`}>
                     <Flame className="h-3 w-3" /> Hot
                   </button>
                 </div>
@@ -206,10 +206,10 @@ function LeadDetail() {
                 const reached = i <= currentIdx;
                 return (
                   <div key={s.id} className="flex items-center">
-                    <button onClick={() => setLeadStage(lead.id, s.id)} className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition ${reached ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"}`}>
+                    <button onClick={() => setLeadStage(lead.id, s.id)} className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition ${reached ? `border-primary bg-primary text-primary-foreground` : `border-border bg-muted/40 text-muted-foreground hover:bg-muted`}`}>
                       {s.label}
                     </button>
-                    {i < arr.length - 1 && <div className={`mx-0.5 h-px w-3 ${reached && i < currentIdx ? "bg-primary" : "bg-border"}`} />}
+                    {i < arr.length - 1 && <div className={`mx-0.5 h-px w-3 ${reached && i < currentIdx ? `bg-primary` : `bg-border`}`} />}
                   </div>
                 );
               })}
@@ -232,7 +232,7 @@ function LeadDetail() {
             {/* Filter tabs */}
             <div className="mt-3 flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
               {FILTERS.map(f => (
-                <button key={f.key} onClick={() => setFilter(f.key)} className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${filter === f.key ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+                <button key={f.key} onClick={() => setFilter(f.key)} className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${filter === f.key ? `bg-primary text-primary-foreground shadow-sm` : `text-muted-foreground hover:bg-muted hover:text-foreground`}`}>
                   {f.label}
                 </button>
               ))}
@@ -424,7 +424,7 @@ function LeadDetail() {
             <dl className="mt-3 space-y-2.5 text-sm">
               <div className="flex justify-between"><dt className="text-muted-foreground">Bedrooms</dt><dd className="font-medium">{lead.requirements?.bedrooms || "-"}</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Bathrooms</dt><dd className="font-medium">{lead.requirements?.bathrooms || "-"}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted-foreground">Area</dt><dd className="font-medium">{lead.requirements?.area ? `${lead.requirements.area} sqm` : "-"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Area</dt><dd className="font-medium">{lead.requirements?.area ? "${lead.requirements.area} sqm" : "-"}</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Location</dt><dd className="font-medium capitalize">{lead.requirements?.location || "-"}</dd></div>
             </dl>
           </Card>
@@ -485,7 +485,7 @@ function LeadDetail() {
                 <li key={t.id} className="flex items-start gap-2 rounded p-1.5 hover:bg-muted/50">
                   <input type="checkbox" checked={t.status === "done"} onChange={() => toggleTask(t.id)} className="mt-1 h-3.5 w-3.5 rounded border-border" />
                   <div className="min-w-0 flex-1">
-                    <p className={`text-xs ${t.status === "done" ? "line-through text-muted-foreground" : ""}`}>{t.title}</p>
+                    <p className={`text-xs ${t.status === `done` ? `line-through text-muted-foreground` : ``}`}>{t.title}</p>
                     <p className="text-[10px] text-muted-foreground">Due {format(new Date(t.dueAt), "MMM d")}</p>
                   </div>
                 </li>

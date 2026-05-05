@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/leads/")({
+export const Route = createFileRoute("/_authenticated/leads/")({
   head: () => ({
     meta: [
       { title: "Leads — PropFlow CRM" },
@@ -64,7 +64,7 @@ function LeadsInbox() {
 
   const handleDelete = () => {
     deleteLeads(ids);
-    toast.success(`${ids.length} lead${ids.length > 1 ? "s" : ""} deleted`);
+    toast.success(`${ids.length} lead${ids.length > 1 ? `s` : ``} deleted`);
     setSelected(new Set());
   };
 
@@ -99,10 +99,10 @@ function LeadsInbox() {
           <div className="flex flex-wrap items-center gap-1">
             <button onClick={() => setStage("all")} className={`rounded-md px-2.5 py-1.5 text-xs font-medium ${stage === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>All</button>
             {PIPELINE_STAGES.map(s => (
-              <button key={s.id} onClick={() => setStage(s.id)} className={`rounded-md px-2.5 py-1.5 text-xs font-medium capitalize ${stage === s.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{s.label}</button>
+              <button key={s.id} onClick={() => setStage(s.id)} className={`rounded-md px-2.5 py-1.5 text-xs font-medium capitalize ${stage === s.id ? `bg-primary text-primary-foreground` : `text-muted-foreground hover:bg-muted`}`}>{s.label}</button>
             ))}
           </div>
-          <button onClick={() => setHotOnly(!hotOnly)} className={`rounded-md px-2.5 py-1.5 text-xs font-medium ${hotOnly ? "bg-hot text-hot-foreground" : "text-muted-foreground hover:bg-muted"}`}>🔥 Hot only</button>
+          <button onClick={() => setHotOnly(!hotOnly)} className={`rounded-md px-2.5 py-1.5 text-xs font-medium ${hotOnly ? `bg-hot text-hot-foreground` : `text-muted-foreground hover:bg-muted`}`}>🔥 Hot only</button>
         </div>
 
         {selected.size > 0 && (
@@ -168,7 +168,7 @@ function LeadsInbox() {
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
-                          <div className={`h-full rounded-full ${lead.score >= 75 ? "bg-success" : lead.score >= 50 ? "bg-warning" : "bg-muted-foreground/40"}`} style={{ width: `${lead.score}%` }} />
+                          <div className={`h-full rounded-full ${lead.score >= 75 ? `bg-success` : lead.score >= 50 ? `bg-warning` : `bg-muted-foreground/40`}`} style={{ width: `${lead.score}%` }} />
                         </div>
                         <span className="text-xs tabular-nums text-muted-foreground">{lead.score}</span>
                       </div>

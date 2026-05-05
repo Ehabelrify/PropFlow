@@ -1,31 +1,8 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts, useRouterState, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import appCss from "../styles.css?url";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/layout/AppSidebar";
-import { Topbar } from "@/components/layout/Topbar";
+import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
 import { DataProvider } from "@/lib/data-store";
-import { AuthProvider, useAuth } from "@/lib/auth-context";
-import { Loader2 } from "lucide-react";
-
-function NotFoundComponent() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">The page you're looking for doesn't exist.</p>
-        <div className="mt-6">
-          <Link to="/" className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-            Back to dashboard
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { AuthProvider } from "@/lib/auth-context";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -39,9 +16,9 @@ export const Route = createRootRoute({
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [{ rel: "stylesheet", href: "/src/styles.css?url" }],
   }),
-  shellComponent: RootShell,
+  shell: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });
@@ -60,7 +37,7 @@ function RootComponent() {
     <AuthProvider>
       <DataProvider>
         <RoleProvider>
-          <RootShellSwitch />
+          <Outlet />
           <Toaster />
         </RoleProvider>
       </DataProvider>
@@ -68,48 +45,19 @@ function RootComponent() {
   );
 }
 
-const PUBLIC_PREFIXES = ["/login", "/reset-password", "/demo", "/widget"];
-
-function RootShellSwitch() {
-  const path = useRouterState({ select: (r) => r.location.pathname });
-  const isPublic = PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + "/"));
-
-  if (isPublic) return <Outlet />;
-  return <AuthGuardedShell />;
-}
-
-function AuthGuardedShell() {
-  const { isAuthed, loading } = useAuth();
-  const navigate = useNavigate();
-  const path = useRouterState({ select: (r) => r.location.pathname });
-  const search = useRouterState({ select: (r) => r.location.search });
-
-  useEffect(() => {
-    if (!loading && !isAuthed) {
-      const redirect = path + (Object.keys(search).length ? `?${new URLSearchParams(search as any).toString()}` : "");
-      navigate({ to: "/login", search: { redirect } as any });
-    }
-  }, [isAuthed, loading, navigate, path, search]);
-
-  if (loading || !isAuthed) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
+function NotFoundComponent() {
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
-        <AppSidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
-          <main className="flex-1 min-w-0">
-            <Outlet />
-          </main>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="max-w-md text-center">
+        <h1 className="text-7xl font-bold text-foreground">404</h1>
+        <h2 className="mt-4 text-xl font-semibold">Page not found</h2>
+        <p className="mt-2 text-sm text-muted-foreground">The page you're looking for doesn't exist.</p>
+        <div className="mt-6">
+          <Link to="/" className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            Back to dashboard
+          </Link>
         </div>
       </div>
-    </SidebarProvider>
+    </div>
   );
 }

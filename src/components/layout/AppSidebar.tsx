@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, Inbox, KanbanSquare, CheckSquare, Calendar, Building2, BarChart3, Users, Settings, Shield,
+  LayoutDashboard, Inbox, KanbanSquare, CheckSquare, Calendar, Building2, BarChart3, Users, Settings, Shield, ClipboardList,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -23,6 +23,7 @@ const main: NavItem[] = [
 ];
 
 const team: NavItem[] = [
+  { title: "Approvals", url: "/approvals", icon: ClipboardList, perm: "tenant.manage_team" },
   { title: "Team", url: "/team", icon: Users, perm: "tenant.manage_team" },
   { title: "Settings", url: "/settings", icon: Settings, perm: "tenant.configure" },
 ];

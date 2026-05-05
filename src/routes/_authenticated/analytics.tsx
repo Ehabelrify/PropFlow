@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { ClientChart } from "@/components/crm/ClientChart";
 
-export const Route = createFileRoute("/analytics")({
+export const Route = createFileRoute("/_authenticated/analytics")({
   head: () => ({ meta: [{ title: "Analytics — PropFlow CRM" }, { name: "description", content: "Pipeline conversion, lead source attribution, and agent performance." }] }),
   component: AnalyticsPage,
 });

@@ -13,7 +13,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip } from "recharts";
 import { ClientChart } from "@/components/crm/ClientChart";
 import { format } from "date-fns";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "Dashboard — PropFlow CRM" },
@@ -46,7 +46,7 @@ function KpiCard({
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
           <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
-          <div className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${deltaPositive ? "text-success" : "text-destructive"}`}>
+          <div className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${deltaPositive ? `text-success` : `text-destructive`}`}>
             {deltaPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
             {delta} <span className="text-muted-foreground font-normal">vs last week</span>
           </div>
@@ -67,7 +67,6 @@ function Dashboard() {
   const hotLeads = leads.filter(l => l.hot).length;
   const wonValue = leads.filter(l => l.stage === "won").reduce((s, l) => s + l.budget, 0);
   const leadIds = new Set(leads.map(l => l.id));
-  // Filter tasks/appointments/activities to user's scope
   const upcoming = APPOINTMENTS.filter(a => a.status === "scheduled" && (orgRole === "super_admin" || leadIds.has(a.leadId) || a.assignedTo === user.id)).slice(0, 4);
   const overdueTasks = TASKS.filter(t => t.status !== "done" && new Date(t.dueAt) < new Date() && (orgRole === "super_admin" || (t.leadId && leadIds.has(t.leadId)) || t.assignedTo === user.id));
   const recentActivity = ACTIVITIES.filter(a => orgRole === "super_admin" || leadIds.has(a.leadId)).slice(0, 6);
@@ -82,7 +81,7 @@ function Dashboard() {
   return (
     <div>
       <PageHeader
-        title={`Welcome back, ${user.name.split(" ")[0]}`}
+        title={`Welcome back, ${user.name.split(` `)[0]}`}
         description={`${scopeLabel} · ${totalLeads} leads in view`}
         actions={
           <>
@@ -146,7 +145,7 @@ function Dashboard() {
                       <span className="text-muted-foreground">{s.count}</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-gradient-brand" style={{ width: `${pct}%` }} />
+                      <div className="h-full rounded-full bg-gradient-brand" style={{ width: "${pct}%" }} />
                     </div>
                   </div>
                 );

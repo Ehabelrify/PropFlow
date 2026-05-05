@@ -13,7 +13,7 @@ import {
 import { MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/admin")({
+export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Platform Admin — PropFlow CRM" }, { name: "description", content: "Super admin console." }] }),
   component: AdminPage,
 });
@@ -47,7 +47,7 @@ function AdminPage() {
       />
       <div className="space-y-6 p-6">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Tenants" value={String(tenants.length)} sub={`${active} active`} icon={Building2} accent="bg-primary-soft text-primary" />
+          <StatCard label="Tenants" value={String(tenants.length)} sub={"${active} active"} icon={Building2} accent="bg-primary-soft text-primary" />
           <StatCard label="Active seats" value={String(totalSeats)} sub="across all tenants" icon={Users} accent="bg-info/10 text-info" />
           <StatCard label="Leads stored" value={totalLeads.toLocaleString()} sub="platform-wide" icon={Activity} accent="bg-success/10 text-success" />
           <StatCard label="Suspended" value={String(tenants.filter(t => t.status === "suspended").length)} sub="needs attention" icon={Ban} accent="bg-destructive/10 text-destructive" />
