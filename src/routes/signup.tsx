@@ -1,5 +1,6 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +17,10 @@ const PLANS = [
   { id: "enterprise", name: "Enterprise", seats: 100, price: "Custom", desc: "Unlimited agents, priority support" },
 ];
 
+const searchSchema = z.object({ mode: z.string().optional() });
+
 export const Route = createFileRoute("/signup")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Sign up — PropFlow CRM" },
@@ -31,9 +35,10 @@ type Step = "mode" | "company" | "personal" | "plan" | "agent-code" | "success";
 
 function SignupPage() {
   const navigate = useNavigate();
+  const { mode: urlMode } = useSearch({ from: "/signup" });
   const { isAuthed, loading } = useAuth();
-  const [mode, setMode] = useState<Mode>("manager");
-  const [step, setStep] = useState<Step>("mode");
+  const [mode, setMode] = useState<Mode>(urlMode === "agent" ? "agent" : "manager");
+  const [step, setStep] = useState<Step>(urlMode === "agent" ? "agent-code" : "mode");
   const [companyName, setCompanyName] = useState("");
   const [slug, setSlug] = useState("");
   const [plan, setPlan] = useState("starter");

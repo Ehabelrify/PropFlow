@@ -28,7 +28,7 @@ function TasksPage() {
   const leadIds = new Set(scopedLeads.map(l => l.id));
   const { data: tasks = [] } = useTasks();
   const filtered = useMemo(() => {
-    return (tasks as any[]).filter(t => {
+    return (tasks || []).filter(t => {
       if (filter !== "all" && t.status !== filter) return false;
       if (t.lead_id && !leadIds.has(t.lead_id)) return false;
       return true;
@@ -60,8 +60,8 @@ function TasksPage() {
 
         <div className="space-y-2">
           {filtered.map(t => {
-            const lead = scopedLeads.find(l => l.id === t.lead_id);
-            const assigned = (profiles as any[]).find((p: any) => p.id === t.assigned_to);
+            const lead = (scopedLeads || []).find(l => l.id === t.lead_id);
+            const assigned = (profiles || []).find((p: any) => p.id === t.assigned_to);
             const isOverdue = t.status !== "done" && new Date(t.due_at) < new Date();
             return (
               <Card key={t.id} className={`p-4 shadow-card ${isOverdue ? `border-destructive/30` : ``}`}>

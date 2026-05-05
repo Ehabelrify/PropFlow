@@ -64,9 +64,9 @@ function AppointmentsPage() {
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map(a => {
-            const lead = scopedLeads.find(l => l.id === a.lead_id);
-            const prop = properties.find(p => p.id === a.property_id);
-            const agent = (profiles as any[]).find((p: any) => p.id === a.assigned_to);
+            const lead = (scopedLeads || []).find(l => l.id === a.lead_id);
+            const prop = (properties || []).find(p => p.id === a.property_id);
+            const agent = (profiles || []).find((p: any) => p.id === a.assigned_to);
             const isUpcoming = a.status === "scheduled" && new Date(a.scheduled_at) > new Date();
 
             return (

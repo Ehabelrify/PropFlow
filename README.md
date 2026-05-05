@@ -48,9 +48,9 @@ PropFlow is built as a SaaS. Every data entity (Leads, Users, Teams) belongs to 
 
 ### 2. State & Data Flow
 The application uses a layered provider system in `src/routes/__root.tsx`:
-1. **`DataProvider`**: Manages the global entity store (Leads, Tasks, etc.). Currently uses mock data but is designed for easy replacement with API calls.
+1. **`AuthProvider`**: Manages authentication state and user sessions via Supabase.
 2. **`RoleProvider`**: Computes permissions and scopes data based on the active user.
-3. **`SidebarProvider`**: Manages the UI state for navigation.
+3. **`QueryClientProvider`**: Provides TanStack Query for server state management.
 
 ---
 
@@ -102,14 +102,13 @@ PropFlow implements a strict hierarchy (`OrgRole`):
 src/
 ├── components/
 │   ├── crm/          # Domain-specific UI (StageBadges, LeadCharts, Dialogs)
-│   ├── layout/       # App Shell (AppSidebar, Topbar, RoleSwitcher)
+│   ├── layout/       # App Shell (AppSidebar, Topbar)
 │   └── ui/           # Reusable base components (Buttons, Cards, Inputs)
-├── hooks/            # Custom hooks (useStore, useRole)
+├── hooks/            # Custom React hooks for Supabase queries/mutations
 ├── lib/              # Core Logic
 │   ├── types.ts      # TypeScript interfaces for all entities
-│   ├── mock-data.ts  # Seeding logic for the demo
-│   ├── data-store.tsx# The entity manager (State logic)
-│   └── role-context.tsx# RBAC & Scoping logic
+│   ├── auth-context.tsx # Authentication context
+│   └── role-context.tsx # RBAC & Scoping logic
 ├── routes/           # TanStack Router File-based routes
 └── styles.css        # Global CSS & Tailwind 4 Configuration
 ```
@@ -119,9 +118,9 @@ src/
 ## 🤖 For AI Agents & Collaborators
 
 ### 🧠 Logic Locations
-- **Adding a new data field**: Update `src/lib/types.ts` first, then modify `src/lib/mock-data.ts`.
+- **Adding a new data field**: Update `src/lib/types.ts` first, then modify database schema.
 - **Modifying Permissions**: Edit the `ROLE_PERMS` object in `src/lib/role-context.tsx`.
-- **API Integration**: Swap the `useState` hooks in `src/lib/data-store.tsx` with TanStack Query `useQuery` hooks.
+- **API Integration**: All data fetching is done via TanStack Query hooks in `src/hooks/use-supabase.ts`.
 - **UI Tweaks**: The project uses **Tailwind CSS 4**. Avoid using `@apply` in CSS; prefer inline utility classes for maximum visibility.
 
 ### 🎨 Design System

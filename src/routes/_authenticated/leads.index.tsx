@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Search, Download, Plus, Phone, Mail, Trash2, Upload } from "lucide-react";
-import { PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
+import { PIPELINE_STAGES, formatCurrency } from "@/lib/constants";
 import { useRole } from "@/lib/role-context";
 import { useAuth } from "@/lib/auth-context";
 import { useDeleteLead, useProfiles } from "@/hooks/use-supabase";
@@ -79,7 +79,10 @@ function LeadsInbox() {
     setSelected(new Set());
   };
 
-  const getOwner = (userId: string) => profiles.find((p: any) => p.id === userId);
+  const getOwner = (userId: string) => {
+    const profilesArray = profiles || [];
+    return profilesArray.find((p: any) => p.id === userId);
+  };
 
   return (
     <div>

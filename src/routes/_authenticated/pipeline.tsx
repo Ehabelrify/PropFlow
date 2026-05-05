@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { useRole } from "@/lib/role-context";
 import { useUpdateLead } from "@/hooks/use-supabase";
-import { PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
+import { PIPELINE_STAGES, formatCurrency } from "@/lib/constants";
 import { StageBadge } from "@/components/crm/StageBadge";
 import { HotBadge } from "@/components/crm/HotBadge";
 import { UserAvatar } from "@/components/crm/Avatar";

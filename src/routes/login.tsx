@@ -117,13 +117,24 @@ function LoginPage() {
 
           {mode === "signup" && (
             <div className="mt-5 space-y-3">
-              <p className="text-sm">
-                Creating a workspace? <Link to="/signup" className="text-primary hover:underline">Sign up as a manager</Link>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Managers can create workspaces and invite team members.
-                If you're joining an existing team, ask your manager for an invite link.
-              </p>
+              <h3 className="text-sm font-semibold">Get started</h3>
+              <p className="text-xs text-muted-foreground">Create a workspace or join an existing team.</p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => navigate({ to: "/signup" })}
+                  className="w-full rounded-lg border border-border p-3 text-left transition hover:border-primary/50"
+                >
+                  <p className="text-sm font-semibold">Create a Workspace</p>
+                  <p className="text-xs text-muted-foreground">You're a manager setting up a new organization</p>
+                </button>
+                <button
+                  onClick={() => navigate({ to: "/signup", search: { mode: "agent" } })}
+                  className="w-full rounded-lg border border-border p-3 text-left transition hover:border-primary/50"
+                >
+                  <p className="text-sm font-semibold">Join a Workspace</p>
+                  <p className="text-xs text-muted-foreground">You're an agent joining with an invite code</p>
+                </button>
+              </div>
               <button type="button" className="block w-full text-center text-xs text-muted-foreground hover:text-foreground" onClick={() => setMode("signin")}>
                 Back to sign in
               </button>
@@ -142,10 +153,6 @@ function LoginPage() {
             </form>
           )}
         </Card>
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          Want to explore without signing in?{" "}
-          <Link to="/demo" className="text-primary hover:underline">Try the demo</Link>
-        </p>
       </div>
     </div>
   );

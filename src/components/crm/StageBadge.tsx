@@ -1,4 +1,4 @@
-import { getStage } from "@/lib/mock-data";
+import { getStage } from "@/lib/constants";
 import type { LeadStage } from "@/lib/types";
 
 export function StageBadge({ stage }: { stage: LeadStage }) {

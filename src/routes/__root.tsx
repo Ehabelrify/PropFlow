@@ -2,7 +2,6 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
-import { DataProvider } from "@/lib/data-store";
 import { AuthProvider } from "@/lib/auth-context";
 import appCss from "../styles.css?url";
 
@@ -47,12 +46,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <DataProvider>
-          <RoleProvider>
-            <Outlet />
-            <Toaster />
-          </RoleProvider>
-        </DataProvider>
+        <RoleProvider>
+          <Outlet />
+          <Toaster />
+        </RoleProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

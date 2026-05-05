@@ -361,7 +361,14 @@ export function useTeams(tenantId?: string) {
   return useQuery({
     queryKey: ["teams", tenantId],
     queryFn: async () => {
-      let q = supabase.from("teams").select("*, leader:profiles(name, initials, avatar_color)").order("name");
+      let q = supabase
+        .from("teams")
+        .select(`
+          *,
+          leader:profiles!leader_id(name, initials, avatar_color),
+          tenant:tenants(name)
+        `)
+        .order("name");
       if (tenantId) q = q.eq("tenant_id", tenantId);
       const { data, error } = await q;
       if (error) throw error;

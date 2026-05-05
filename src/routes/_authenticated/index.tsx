@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown, Users, Target, Calendar, Flame, ArrowRight, CheckCircle2, Clock } from "lucide-react";
-import { PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
+import { PIPELINE_STAGES, formatCurrency } from "@/lib/constants";
 import { useRole } from "@/lib/role-context";
 import { useDashboardStats, useActivities, useAppointments, useTasks } from "@/hooks/use-supabase";
 import { PageHeader } from "@/components/crm/PageHeader";
@@ -56,8 +56,8 @@ function Dashboard() {
   const wonValue = stats?.wonRevenue ?? leads.filter(l => l.stage === "won").reduce((s, l) => s + l.budget, 0);
   const pipelineValue = stats?.pipelineValue ?? leads.reduce((s, l) => s + l.budget, 0);
   const leadIds = new Set(leads.map(l => l.id));
-  const upcoming = (appointments ?? []).filter(a => a.status === "scheduled" && (orgRole === "super_admin" || leadIds.has(a.lead_id) || a.assigned_to === user.id)).slice(0, 4);
-  const overdueTasks = (tasks ?? []).filter(t => t.status !== "done" && new Date(t.due_at) < new Date() && (orgRole === "super_admin" || (t.lead_id && leadIds.has(t.lead_id)) || t.assigned_to === user.id));
+  const upcoming = (appointments ?? []).filter(a => a.status === "scheduled" && orgRole === "super_admin" || (leadIds.has(a.lead_id) || a.assigned_to === (user?.id ?? ""))).slice(0, 4);
+  const overdueTasks = (tasks ?? []).filter(t => t.status !== "done" && new Date(t.due_at) < new Date() && (orgRole === "super_admin" || (t.lead_id && leadIds.has(t.lead_id)) || t.assigned_to === (user?.id ?? "")));
   const recentActivity = (activities ?? []).filter(a => orgRole === "super_admin" || leadIds.has(a.lead_id)).slice(0, 6);
   const getLead = (id: string) => leads.find(l => l.id === id);
 
@@ -78,7 +78,7 @@ function Dashboard() {
   return (
     <div>
       <PageHeader
-        title={`Welcome back, ${user.name.split(` `)[0]}`}
+        title={`Welcome back, ${user?.name?.split(` `)[0] ?? "User"}`}
         description={`${scopeLabel} · ${totalLeads} leads in view`}
         actions={
           <>

@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend, CartesianGrid } from "recharts";
 import { ClientChart } from "@/components/crm/ClientChart";
-import { PIPELINE_STAGES, formatCurrency } from "@/lib/mock-data";
+import { PIPELINE_STAGES, formatCurrency } from "@/lib/constants";
 import { BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/analytics")({
@@ -23,7 +23,7 @@ function AnalyticsPage() {
   scopedLeads.forEach(l => sourceCount[l.source] = (sourceCount[l.source] || 0) + 1);
   const sourceData = Object.entries(sourceCount).map(([source, count]) => ({ source, count }));
 
-  const agentPerf = (profiles as any[]).map(u => {
+  const agentPerf = (profiles || []).map(u => {
     const owned = scopedLeads.filter(l => l.assignedTo === u.id);
     const displayName = u.name ? u.name.split(" ")[0] : "Unknown";
     return { name: displayName, leads: owned.length, won: owned.filter(l => l.stage === "won").length };

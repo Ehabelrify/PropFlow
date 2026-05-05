@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Mail, Phone, Copy, Check, Plus, KeyRound, Trash2, UserCog, Users, Shield, AlertTriangle } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Mail, Copy, Check, Plus, KeyRound, Trash2, UserCog, Users, AlertTriangle, Building2 } from "lucide-react";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,10 +19,11 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/lib/role-context";
 import { ORG_ROLE_LABEL } from "@/lib/role-context";
-import { useProfiles, useTeams, useTenant, useInvitations, useCreateInvitation, useRevokeInvitation, useUpdateUserRole, useAssignTeam } from "@/hooks/use-supabase";
-import { useCreateTeam } from "@/hooks/use-supabase";
+import { useProfiles, useTeams, useTenants, useTenant, useInvitations, useCreateInvitation, useRevokeInvitation, useUpdateUserRole, useAssignTeam, useCreateTeam } from "@/hooks/use-supabase";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+
+const NO_TEAM_VALUE = "__none__";
 
 export const Route = createFileRoute("/_authenticated/team")({
   head: () => ({ meta: [{ title: "Team — PropFlow CRM" }] }),
@@ -30,12 +31,18 @@ export const Route = createFileRoute("/_authenticated/team")({
 });
 
 function TeamPage() {
-  const { profile, roles } = useAuth();
-  const { has, scopedLeads, orgRole } = useRole();
-  const { data: profiles = [] } = useProfiles(profile?.tenant_id ?? undefined);
-  const { data: teams = [] } = useTeams(profile?.tenant_id ?? undefined);
-  const { data: tenant } = useTenant(profile?.tenant_id ?? undefined);
-  const { data: invitations = [] } = useInvitations(profile?.tenant_id ?? undefined);
+  const { profile } = useAuth();
+  const { scopedLeads, orgRole } = useRole();
+  const isSuperAdmin = orgRole === "super_admin";
+  const isManager = orgRole === "manager";
+
+  // Super admin sees all; manager sees only their tenant
+  const tenantId = profile?.tenant_id ?? undefined;
+  const { data: profiles = [] } = useProfiles(isSuperAdmin ? undefined : tenantId);
+  const { data: teams = [] } = useTeams(isSuperAdmin ? undefined : tenantId);
+  const { data: allTenants = [] } = useTenants();
+  const { data: currentTenant } = useTenant(tenantId);
+  const { data: invitations = [] } = useInvitations(tenantId);
   const createInvitation = useCreateInvitation();
   const revokeInvitation = useRevokeInvitation();
   const updateRole = useUpdateUserRole();
@@ -44,19 +51,34 @@ function TeamPage() {
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [inviteDialog, setInviteDialog] = useState(false);
+  const [inviteTeamId, setInviteTeamId] = useState<string>(NO_TEAM_VALUE);
   const [teamDialog, setTeamDialog] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editRole, setEditRole] = useState<string>("");
-  const [editTeam, setEditTeam] = useState<string>("");
+  const [editTeam, setEditTeam] = useState<string>(NO_TEAM_VALUE);
   const [processing, setProcessing] = useState(false);
 
-  const isManager = orgRole === "manager" || orgRole === "super_admin";
-  const usedSeats = (profiles as any[]).length;
-  const totalSeats = (tenant as any)?.seats ?? 5;
+  const usedSeats = isManager ? profiles.length : 0;
+  const totalSeats = (currentTenant as any)?.seats ?? 5;
   const atCapacity = usedSeats >= totalSeats;
 
-  const teamMap = new Map((teams as any[]).map((t: any) => [t.id, t.name]));
+  const teamMap = new Map((teams as any[]).map((t: any) => [t.id, t]));
+
+  // Group profiles by team
+  const profilesByTeam = useMemo(() => {
+    const grouped: Record<string, any[]> = { unassigned: [] };
+    (profiles as any[]).forEach((u: any) => {
+      const tid = u.team_id;
+      if (tid && teamMap.has(tid)) {
+        if (!grouped[tid]) grouped[tid] = [];
+        grouped[tid].push(u);
+      } else {
+        grouped.unassigned.push(u);
+      }
+    });
+    return grouped;
+  }, [profiles, teamMap]);
 
   const copyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -67,8 +89,16 @@ function TeamPage() {
 
   const handleCreateInvite = () => {
     if (!profile?.tenant_id) return;
-    createInvitation.mutate({ tenant_id: profile.tenant_id, expires_in_hours: 168 }, {
-      onSuccess: () => toast.success("Invitation code created"),
+    const teamId = inviteTeamId === NO_TEAM_VALUE ? null : inviteTeamId;
+    createInvitation.mutate({
+      tenant_id: profile.tenant_id,
+      team_id: teamId,
+      expires_in_hours: 168
+    }, {
+      onSuccess: () => {
+        toast.success("Invitation code created");
+        setInviteTeamId(NO_TEAM_VALUE);
+      },
     });
   };
 
@@ -89,9 +119,10 @@ function TeamPage() {
       }));
     }
     const currentTeam = editingUser.team_id ?? null;
-    if (editTeam !== currentTeam) {
+    const newTeam = editTeam === NO_TEAM_VALUE ? null : editTeam;
+    if (newTeam !== currentTeam) {
       promises.push(new Promise<void>((resolve) => {
-        assignTeam.mutate({ userId: editingUser.id, teamId: editTeam || null }, { onSettled: () => resolve() });
+        assignTeam.mutate({ userId: editingUser.id, teamId: newTeam }, { onSettled: () => resolve() });
       }));
     }
     Promise.all(promises).then(() => {
@@ -117,16 +148,69 @@ function TeamPage() {
     });
   };
 
+  const handleInviteToTeam = (teamId: string) => {
+    setInviteTeamId(teamId);
+    setInviteDialog(true);
+  };
+
+  const renderAgentCard = (u: any) => {
+    const role = (u.user_roles?.[0]?.role ?? "agent") as "super_admin" | "manager" | "leader" | "agent";
+    const ownedLeads = scopedLeads.filter(l => l.assignedTo === u.id);
+    const wonLeads = ownedLeads.filter(l => l.stage === "won");
+    const wonValue = wonLeads.reduce((s: number, l: any) => s + l.budget, 0);
+
+    return (
+      <Card key={u.id} className="border border-border/60 p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${u.avatar_color ?? "bg-chart-1"} text-xs font-semibold text-white`}>
+              {u.initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{u.name}</p>
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                role === "manager" ? "bg-primary/10 text-primary" :
+                role === "leader" ? "bg-info/10 text-info" :
+                role === "super_admin" ? "bg-destructive/10 text-destructive" :
+                "bg-muted text-muted-foreground"
+              }`}>{ORG_ROLE_LABEL[role]}</span>
+            </div>
+          </div>
+          {isManager && role !== "super_admin" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0"><UserCog className="h-3 w-3" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => { setEditingUser(u); setEditRole(role); setEditTeam(u.team_id ?? NO_TEAM_VALUE); }}>
+                  <UserCog className="mr-2 h-3.5 w-3.5" /> Edit role & team
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          <a href={`mailto:${u.email}`} className="hover:text-foreground flex items-center gap-1"><Mail className="h-3 w-3" /> Email</a>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <MiniStat label="Leads" value={String(ownedLeads.length)} />
+          <MiniStat label="Won" value={String(wonLeads.length)} />
+          <MiniStat label="Value" value={wonValue > 0 ? `EGP ${(wonValue / 1_000_000).toFixed(1)}M` : "—"} />
+        </div>
+      </Card>
+    );
+  };
+
   return (
     <div>
       <PageHeader
         title="Team"
-        description="Manage members, teams, and invitation codes."
+        description={isSuperAdmin ? "All teams across all tenants." : "Manage members, teams, and invitation codes."}
         actions={
           <div className="flex gap-2">
             {isManager && (
               <>
-                <Button size="sm" variant="outline" onClick={() => setInviteDialog(true)}>
+                <Button size="sm" variant="outline" onClick={() => { setInviteTeamId(NO_TEAM_VALUE); setInviteDialog(true); }}>
                   <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Invite codes
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setTeamDialog(true)}>
@@ -138,7 +222,7 @@ function TeamPage() {
         }
       />
 
-      {/* Seat usage */}
+      {/* Seat usage - only for manager, not super admin */}
       {isManager && (
         <Card className="mx-6 mb-4 p-4 shadow-card">
           <div className="flex items-center justify-between">
@@ -163,58 +247,94 @@ function TeamPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 p-6 sm:grid-cols-2 xl:grid-cols-3">
-        {(profiles as any[]).map(u => {
-          const role = (u.user_roles?.[0]?.role ?? "agent") as "super_admin" | "manager" | "leader" | "agent";
-          const teamName = u.team_id ? teamMap.get(u.team_id) : null;
-          const ownedLeads = scopedLeads.filter(l => l.assignedTo === u.id);
-          const wonLeads = ownedLeads.filter(l => l.stage === "won");
-          const wonValue = wonLeads.reduce((s, l) => s + l.budget, 0);
-
-          return (
-            <Card key={u.id} className="p-5 shadow-card">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${u.avatar_color ?? "bg-chart-1"} text-sm font-semibold text-white`}>
-                    {u.initials}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{u.name}</p>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                        role === "manager" ? "bg-primary/10 text-primary" :
-                        role === "leader" ? "bg-info/10 text-info" :
-                        role === "super_admin" ? "bg-destructive/10 text-destructive" :
-                        "bg-muted text-muted-foreground"
-                      }`}>{ORG_ROLE_LABEL[role]}</span>
-                      {teamName && <span>· {teamName}</span>}
+      {/* Teams and Agents */}
+      <div className="flex flex-col gap-6 p-6">
+        {(teams as any[]).length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Building2 className="mb-4 h-12 w-12 text-muted-foreground/50" />
+            <h3 className="text-lg font-semibold">No teams yet</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isManager
+                ? "Create your first team to start organizing agents."
+                : "No teams have been created yet."}
+            </p>
+            {isManager && (
+              <Button className="mt-4 bg-gradient-brand text-primary-foreground" onClick={() => setTeamDialog(true)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Create first team
+              </Button>
+            )}
+          </div>
+        ) : (
+          (teams as any[]).map((team: any) => {
+            const teamProfiles = profilesByTeam[team.id] || [];
+            const tenantName = team.tenant?.name;
+            const displayName = isSuperAdmin && tenantName
+              ? `${team.name} — ${tenantName}`
+              : team.name;
+            return (
+              <Card key={team.id} className="overflow-hidden shadow-card">
+                <div className="border-b bg-muted/30 px-5 py-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold">{displayName}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {team.leader?.name ? `Led by ${team.leader.name}` : "No leader assigned"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {teamProfiles.length} agent{teamProfiles.length !== 1 ? "s" : ""}
+                      </Badge>
+                      {isManager && (
+                        <Button size="sm" variant="outline" onClick={() => handleInviteToTeam(team.id)}>
+                          <KeyRound className="mr-1.5 h-3 w-3" /> Invite
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
-                {isManager && role !== "super_admin" && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"><UserCog className="h-3.5 w-3.5" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => { setEditingUser(u); setEditRole(role); setEditTeam(u.team_id ?? ""); }}>
-                        <UserCog className="mr-2 h-3.5 w-3.5" /> Edit role & team
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                <div className="p-5">
+                  {teamProfiles.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-sm text-muted-foreground mb-3">No agents assigned to this team yet.</p>
+                      {isManager && (
+                        <Button size="sm" variant="outline" onClick={() => handleInviteToTeam(team.id)}>
+                          <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Invite agents
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {teamProfiles.map(u => renderAgentCard(u))}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            );
+          })
+        )}
+
+        {/* Unassigned agents */}
+        {profilesByTeam.unassigned?.length > 0 && (
+          <Card className="overflow-hidden shadow-card border-dashed">
+            <div className="border-b bg-muted/30 px-5 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-muted-foreground">Unassigned</h3>
+                  <p className="text-xs text-muted-foreground">Agents not assigned to any team</p>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {profilesByTeam.unassigned.length} agent{profilesByTeam.unassigned.length !== 1 ? "s" : ""}
+                </Badge>
               </div>
-              <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-                <a href={`mailto:${u.email}`} className="hover:text-foreground flex items-center gap-1"><Mail className="h-3 w-3" /> Email</a>
+            </div>
+            <div className="p-5">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {profilesByTeam.unassigned.map(u => renderAgentCard(u))}
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-3">
-                <MiniStat label="Leads" value={String(ownedLeads.length)} />
-                <MiniStat label="Won" value={String(wonLeads.length)} />
-                <MiniStat label="Value" value={wonValue > 0 ? `EGP ${(wonValue / 1_000_000).toFixed(1)}M` : "—"} />
-              </div>
-            </Card>
-          );
-        })}
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Edit user dialog */}
@@ -242,7 +362,7 @@ function TeamPage() {
                 <Select value={editTeam} onValueChange={setEditTeam}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="No team" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No team</SelectItem>
+                    <SelectItem value={NO_TEAM_VALUE}>No team</SelectItem>
                     {(teams as any[]).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -283,13 +403,33 @@ function TeamPage() {
             <DialogTitle>Invitation codes</DialogTitle>
             <DialogDescription>Share codes with agents to join your workspace.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs">Team (optional)</Label>
+              <Select value={inviteTeamId} onValueChange={setInviteTeamId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="No specific team (tenant-wide)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_TEAM_VALUE}>No team (tenant-wide)</SelectItem>
+                  {(teams as any[]).map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {inviteTeamId !== NO_TEAM_VALUE
+                  ? "Agent will be assigned to this team upon joining"
+                  : "Agent can be assigned to a team later by a manager"}
+              </p>
+            </div>
             {(invitations as any[]).map((inv: any) => (
               <div key={inv.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
                 <div>
                   <p className="font-mono text-sm font-semibold">{inv.code}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {inv.is_active ? `Expires ${formatDistanceToNow(new Date(inv.expires_at), { addSuffix: true })}` : "Revoked"}
+                    {inv.team_id && ` · ${(teams as any[]).find((t: any) => t.id === inv.team_id)?.name || 'Unknown team'}`}
                   </p>
                 </div>
                 <div className="flex gap-1">

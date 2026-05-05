@@ -12,7 +12,7 @@ import {
 import { useRole } from "@/lib/role-context";
 import { useAuth } from "@/lib/auth-context";
 import { useProfiles, useCreateLead, useCreateActivity, useCreateTask, useCreateAppointment, useCreateProperty, useUpdateLead, useTenants, useProperties } from "@/hooks/use-supabase";
-import { PIPELINE_STAGES } from "@/lib/mock-data";
+import { PIPELINE_STAGES } from "@/lib/constants";
 import { toast } from "sonner";
 import type { LeadSource, LeadStage, TaskPriority, PropertyType, PropertyStatus } from "@/lib/types";
 
@@ -171,7 +171,7 @@ export function NewTaskDialog({ trigger, leadId }: { trigger: ReactNode; leadId?
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueAt, setDueAt] = useState(() => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
-  const [assignedTo, setAssignedTo] = useState(user.id);
+  const [assignedTo, setAssignedTo] = useState(user?.id ?? "");
 
   const submit = () => {
     if (!title.trim()) return toast.error("Title required");
@@ -251,8 +251,8 @@ export function ScheduleVisitDialog({ trigger, leadId }: { trigger: ReactNode; l
 
   const submit = () => {
     if (!chosenLead) return toast.error("Pick a lead");
-    const lead = scopedLeads.find(l => l.id === chosenLead);
-    const prop = properties.find((p) => p.id === propertyId);
+    const lead = (scopedLeads || []).find(l => l.id === chosenLead);
+    const prop = (properties || []).find((p) => p.id === propertyId);
     createAppointment.mutate({
       title: `Site visit — ${lead?.name ?? "lead"}`,
       lead_id: chosenLead,

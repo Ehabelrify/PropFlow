@@ -1,10 +1,16 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { useStore } from "./data-store";
-import { TEAMS, orgRoleOf } from "./mock-data";
 import type { User, Lead } from "./types";
 import { useAuth, type AppRole } from "./auth-context";
 import { useLeads, useTeams } from "@/hooks/use-supabase";
 import type { Database } from "@/types/database";
+
+export function orgRoleOf(u: User | null | undefined): "super_admin" | "manager" | "leader" | "agent" {
+  if (!u) return "agent";
+  if (u.role === "super_admin") return "super_admin";
+  if (u.role === "agent") return "agent";
+  if (u.role === "manager" && u.teamId) return "leader";
+  return "manager";
+}
 
 type DbLead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -49,7 +55,7 @@ const ROLE_PERMS: Record<OrgRole, Permission[]> = {
 };
 
 interface RoleContextValue {
-  user: User;
+  user: User | null;
   orgRole: OrgRole;
   setUserId: (id: string) => void;
   has: (perm: Permission) => boolean;
@@ -84,46 +90,51 @@ function dbLeadToMockLead(db: DbLead): Lead {
 const RoleContext = createContext<RoleContextValue | null>(null);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const { users, leads: mockLeads } = useStore();
-  const { profile, roles: authRoles, isAuthed } = useAuth();
-  const [userId, setUserId] = useState<string>("u1");
+  const { profile, roles: authRoles, isAuthed, session } = useAuth();
+  const [userId, setUserId] = useState<string>("");
 
   const { data: dbLeads = [] } = useLeads();
   const { data: dbTeams = [] } = useTeams(profile?.tenant_id ?? undefined);
 
   const authUser = useMemo<User | null>(() => {
-    if (!profile) return null;
-    const primaryRole = (authRoles.length > 0 ? authRoles[0] : "agent") as OrgRole;
+    if (!session?.user) return null;
+    const primaryRole = authRoles.includes("super_admin") ? "super_admin" :
+                      authRoles.includes("manager") ? "manager" :
+                      authRoles.includes("leader") ? "leader" : "agent";
     return {
-      id: profile.id,
-      name: profile.name || profile.email.split("@")[0],
-      email: profile.email,
+      id: profile?.id ?? session.user.id,
+      name: (profile?.name || session.user.email?.split("@")[0]) ?? "User",
+      email: profile?.email ?? session.user.email ?? "",
       role: primaryRole === "leader" ? "manager" : (primaryRole === "super_admin" ? "super_admin" : primaryRole === "manager" ? "manager" : "agent"),
-      avatarColor: profile.avatar_color,
-      initials: profile.initials,
-      tenantId: profile.tenant_id ?? undefined,
-      teamId: profile.team_id ?? undefined,
+      avatarColor: profile?.avatar_color ?? "bg-chart-1",
+      initials: profile?.initials ?? (session.user.email?.[0]?.toUpperCase() ?? "?"),
+      tenantId: profile?.tenant_id ?? undefined,
+      teamId: profile?.team_id ?? undefined,
     };
-  }, [profile, authRoles]);
+  }, [profile, authRoles, session?.user]);
 
-  const user = authUser ?? (users.find(u => u.id === userId) ?? users[0]);
-  const isDemo = !authUser;
+  const user = authUser;
 
-  let orgRole: OrgRole;
-  if (isDemo) {
-    orgRole = orgRoleOf(user);
-  } else {
-    orgRole = authRoles.length > 0 ? authRoles[0] : "agent";
+  let orgRole: OrgRole = "agent";
+  if (user) {
+    orgRole = authRoles.includes("super_admin") ? "super_admin" :
+             authRoles.includes("manager") ? "manager" :
+             authRoles.includes("leader") ? "leader" : "agent";
   }
 
-  const allLeads = isAuthed ? (dbLeads.length > 0 ? dbLeads.map(dbLeadToMockLead) : mockLeads) : mockLeads;
+  const allLeads = isAuthed ? (dbLeads.length > 0 ? dbLeads.map(dbLeadToMockLead) : []) : [];
 
   const value = useMemo<RoleContextValue>(() => {
+    if (!user) {
+      return { user: null!, orgRole, setUserId, has: () => false, scopedLeads: [], scopeLabel: "" };
+    }
+
     const perms = new Set(ROLE_PERMS[orgRole]);
     const has = (p: Permission) => perms.has(p);
 
     let scopedLeads: Lead[] = [];
     let scopeLabel = "";
+
     if (orgRole === "super_admin") {
       scopedLeads = allLeads;
       scopeLabel = "Platform-wide";
@@ -131,17 +142,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       scopedLeads = allLeads.filter(l => l.tenantId === user.tenantId);
       scopeLabel = "All teams";
     } else if (orgRole === "leader") {
-      const teamUserIds = new Set(users.filter(u => u.teamId === user.teamId).map(u => u.id));
-      scopedLeads = allLeads.filter(l => l.tenantId === user.tenantId && (teamUserIds.has(l.assignedTo) || l.teamId === user.teamId));
-      const team = dbTeams.find(t => t.id === user.teamId) ?? TEAMS.find(t => t.id === user.teamId);
+      scopedLeads = allLeads.filter(l => l.tenantId === user.tenantId && (l.assignedTo === user.id || l.teamId === user.teamId));
+      const team = (dbTeams || []).find(t => t.id === user.teamId);
       scopeLabel = team ? `${team.name} team` : "My team";
     } else {
-      scopedLeads = isDemo ? allLeads.filter(l => l.assignedTo === user.id) : allLeads;
-      scopeLabel = isDemo ? "Assigned to me" : "All my leads";
+      scopedLeads = allLeads.filter(l => l.assignedTo === user.id);
+      scopeLabel = "Assigned to me";
     }
 
     return { user, orgRole, setUserId, has, scopedLeads, scopeLabel };
-  }, [user, orgRole, allLeads, users, isDemo, dbTeams]);
+  }, [user, orgRole, allLeads, dbTeams]);
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 }
@@ -150,6 +160,12 @@ export function useRole() {
   const ctx = useContext(RoleContext);
   if (!ctx) throw new Error("useRole must be used within RoleProvider");
   return ctx;
+}
+
+// Helper to check if user has any of the given roles
+export function useHasAnyRole(roles: OrgRole[]) {
+  const { orgRole } = useRole();
+  return roles.includes(orgRole);
 }
 
 export const ORG_ROLE_LABEL: Record<OrgRole, string> = {

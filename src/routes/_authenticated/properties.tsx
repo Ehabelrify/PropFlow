@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useProperties } from "@/hooks/use-supabase";
-import { formatCurrency } from "@/lib/mock-data";
+import { formatCurrency } from "@/lib/constants";
 import { NewPropertyDialog } from "@/components/crm/dialogs";
 
 export const Route = createFileRoute("/_authenticated/properties")({

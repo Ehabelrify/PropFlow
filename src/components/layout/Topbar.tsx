@@ -50,10 +50,10 @@ function ProfileDropdown() {
   const navigate = useNavigate();
   const { profile, roles, signOut } = useAuth();
   const { user, orgRole } = useRole();
-  const initials = profile?.initials ?? user.initials;
-  const avatarColor = profile?.avatar_color ?? user.avatarColor;
-  const displayName = profile?.name ?? user.name;
-  const displayEmail = profile?.email ?? user.email;
+  const initials = profile?.initials ?? user?.initials ?? "?";
+  const avatarColor = profile?.avatar_color ?? user?.avatarColor ?? "bg-gray-500";
+  const displayName = profile?.name ?? user?.name ?? "User";
+  const displayEmail = profile?.email ?? user?.email ?? "";
 
   return (
     <DropdownMenu>

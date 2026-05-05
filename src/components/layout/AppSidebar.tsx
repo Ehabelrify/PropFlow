@@ -7,7 +7,8 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { useRole, ORG_ROLE_LABEL } from "@/lib/role-context";
-import { getTeam } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
+import { useTeams } from "@/hooks/use-supabase";
 import type { Permission } from "@/lib/role-context";
 
 type NavItem = { title: string; url: string; icon: any; exact?: boolean; perm?: Permission };
@@ -37,7 +38,8 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (r) => r.location.pathname });
   const { user, orgRole, has } = useRole();
-  const userTeam = getTeam(user.teamId);
+  const { profile } = useAuth();
+  const { data: teams = [] } = useTeams(profile?.tenant_id ?? undefined);
   const isActive = (url: string, exact?: boolean) =>
     exact ? path === url : path === url || path.startsWith(url + "/");
   const visible = (items: NavItem[]) => items.filter(i => !i.perm || has(i.perm));
@@ -120,14 +122,14 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="flex items-center gap-2 px-1 py-1.5">
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${user.avatarColor} text-[11px] font-semibold text-white`}>
-            {user.initials}
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${user?.avatarColor ?? "bg-gray-500"} text-[11px] font-semibold text-white`}>
+            {user?.initials ?? "?"}
           </div>
           {!collapsed && (
             <div className="flex min-w-0 flex-col leading-tight">
-              <span className="truncate text-sm font-medium">{user.name}</span>
+              <span className="truncate text-sm font-medium">{user?.name ?? "User"}</span>
               <span className="truncate text-[11px] text-muted-foreground">
-                {ORG_ROLE_LABEL[orgRole]}{userTeam ? ` · ${userTeam.name}` : ""}
+                {ORG_ROLE_LABEL[orgRole]}{user?.teamId ? ` · ${teams?.find?.(t => t.id === user.teamId)?.name ?? ""}` : ""}
               </span>
             </div>
           )}

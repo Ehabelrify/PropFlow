@@ -6,7 +6,7 @@ export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_sh
 export type PropertyStatus = "available" | "reserved" | "sold";
 export type PropertyType = "apartment" | "villa" | "townhouse" | "office" | "land";
 export type ActivityType = "call" | "note" | "email" | "whatsapp" | "stage_change" | "appointment" | "task";
-export type Role = "super_admin" | "admin" | "manager" | "agent";
+export type Role = "super_admin" | "manager" | "leader" | "agent";
 // Extended role hierarchy for tenant org charts.
 // "admin" is kept as alias of "manager" for backward compat with existing data.
 export type OrgRole = "super_admin" | "manager" | "leader" | "agent";

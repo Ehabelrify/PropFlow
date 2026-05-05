@@ -4,7 +4,7 @@ import {
   ArrowLeft, Phone, Mail, MessageCircle, Calendar, Plus, MapPin, Building2,
   FileText, ArrowRight, CheckCircle2, Clock, CircleDot, Send, Flame, X, Tag, Edit3, PlusCircle,
 } from "lucide-react";
-import { formatCurrency, PIPELINE_STAGES } from "@/lib/mock-data";
+import { formatCurrency, PIPELINE_STAGES } from "@/lib/constants";
 import { useRole } from "@/lib/role-context";
 import { useAuth } from "@/lib/auth-context";
 import { useLead, useUpdateLead, useActivities, useTasks, useAppointments, useProperties, useCreateActivity, useProfiles } from "@/hooks/use-supabase";
@@ -113,16 +113,19 @@ function LeadDetail() {
   if (isLoading) return <div className="p-12 text-center text-sm text-muted-foreground">Loading lead...</div>;
   if (!lead) return <div className="p-12 text-center text-sm text-muted-foreground">Lead not found.</div>;
 
-  const owner = (profiles as any[]).find((p: any) => p.id === lead.assigned_to);
-  const property = properties.find(p => p.id === lead.property_interest);
+  const owner = (profiles || []).find((p: any) => p.id === lead.assigned_to);
+  const property = (properties || []).find(p => p.id === lead.property_interest);
 
   const timeline = useMemo(() => {
     const entries: TimelineEntry[] = [];
     activities.forEach(a => {
       entries.push({ id: a.id, kind: "activity", sortDate: a.created_at, activity: a });
     });
-    (tasks as any[]).forEach(t => {
-      entries.push({ id: `task-${t.id}`, kind: `task`, sortDate: t.created_at, task: t });
+    (tasks || []).forEach(t => {
+      entries.push({ id: `task-${t.id}`, kind: "task", sortDate: t.created_at, task: t });
+    });
+    (appointments || []).forEach(a => {
+      entries.push({ id: `appt-${a.id}`, kind: "appointment", sortDate: a.scheduled_at, appointment: a });
     });
     (appointments as any[]).forEach(a => {
       entries.push({ id: `appt-${a.id}`, kind: `appointment`, sortDate: a.scheduled_at, appointment: a });

@@ -37,17 +37,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const loadProfile = async (uid: string) => {
-    const [{ data: p }, { data: r }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", uid),
-    ]);
-    let tenantStatus: string | null = null;
-    if ((p as Profile)?.tenant_id) {
-      const { data: t } = await supabase.from("tenants").select("status").eq("id", (p as Profile).tenant_id).maybeSingle();
-      tenantStatus = t?.status ?? null;
+    try {
+      const [{ data: p }, { data: r }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", uid),
+      ]);
+      
+      // If no profile exists, create a minimal one from user metadata
+      if (!p && session?.user) {
+        const { data: newProfile } = await supabase.from("profiles").insert({
+          id: uid,
+          name: session.user.email?.split("@")[0] || "User",
+          email: session.user.email || "",
+          avatar_color: "bg-chart-1",
+          initials: session.user.email?.[0]?.toUpperCase() || "?",
+        }).select().single();
+        setProfile(newProfile ? { ...newProfile, tenant_status: null } : null);
+        setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
+        return;
+      }
+      
+      let tenantStatus: string | null = null;
+      if ((p as Profile)?.tenant_id) {
+        const { data: t } = await supabase.from("tenants").select("status").eq("id", (p as Profile).tenant_id!).maybeSingle();
+        tenantStatus = t?.status ?? null;
+      }
+      const profileData = p as Profile;
+      setProfile(profileData ? { ...profileData, tenant_status: tenantStatus } : null);
+      setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
+    } catch (error) {
+      console.error("Error loading profile:", error);
+      setProfile(null);
+      setRoles([]);
     }
-    setProfile({ ...(p as Profile), tenant_status: tenantStatus } ?? null);
-    setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
   };
 
   useEffect(() => {
