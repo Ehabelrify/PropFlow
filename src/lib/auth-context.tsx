@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  type ReactNode,
+} from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -36,34 +43,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = async (uid: string) => {
+  // ✅ prevents double-init loops (CRITICAL FIX)
+  const initialized = useRef(false);
+
+  const loadProfile = async (uid: string, currentSession?: Session | null) => {
     try {
       const [{ data: p }, { data: r }] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", uid),
       ]);
-      
-      // If no profile exists, create a minimal one from user metadata
-      if (!p && session?.user) {
-        const { data: newProfile } = await supabase.from("profiles").insert({
-          id: uid,
-          name: session.user.email?.split("@")[0] || "User",
-          email: session.user.email || "",
-          avatar_color: "bg-chart-1",
-          initials: session.user.email?.[0]?.toUpperCase() || "?",
-        }).select().single();
-        setProfile(newProfile ? { ...newProfile, tenant_status: null } : null);
+
+      const activeSession = currentSession ?? session;
+
+      // create profile if missing
+      if (!p && activeSession?.user) {
+        const { data: newProfile } = await supabase
+          .from("profiles")
+          .insert({
+            id: uid,
+            name: activeSession.user.email?.split("@")[0] || "User",
+            email: activeSession.user.email || "",
+            avatar_color: "bg-chart-1",
+            initials: activeSession.user.email?.[0]?.toUpperCase() || "?",
+          })
+          .select()
+          .single();
+
+        setProfile(
+          newProfile ? { ...newProfile, tenant_status: null } : null
+        );
+
         setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
         return;
       }
-      
+
       let tenantStatus: string | null = null;
+
       if ((p as Profile)?.tenant_id) {
-        const { data: t } = await supabase.from("tenants").select("status").eq("id", (p as Profile).tenant_id!).maybeSingle();
+        const { data: t } = await supabase
+          .from("tenants")
+          .select("status")
+          .eq("id", (p as Profile).tenant_id!)
+          .maybeSingle();
+
         tenantStatus = t?.status ?? null;
       }
+
       const profileData = p as Profile;
-      setProfile(profileData ? { ...profileData, tenant_status: tenantStatus } : null);
+
+      setProfile(
+        profileData
+          ? { ...profileData, tenant_status: tenantStatus }
+          : null
+      );
+
       setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
     } catch (error) {
       console.error("Error loading profile:", error);
@@ -73,41 +106,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
-      if (s?.user) {
-        setTimeout(() => loadProfile(s.user.id), 0);
-      } else {
-        setProfile(null);
-        setRoles([]);
+    if (initialized.current) return;
+    initialized.current = true;
+
+    let mounted = true;
+
+    // 🔥 Auth state listener (NO LOOP VERSION)
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        if (!mounted) return;
+
+        setSession(newSession);
+
+        if (newSession?.user?.id) {
+          loadProfile(newSession.user.id, newSession);
+        } else {
+          setProfile(null);
+          setRoles([]);
+        }
       }
-    });
-    supabase.auth.getSession().then(async ({ data }) => {
+    );
+
+    // Initial session load
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+
       setSession(data.session);
-      if (data.session?.user) await loadProfile(data.session.user.id);
+
+      if (data.session?.user?.id) {
+        loadProfile(data.session.user.id, data.session);
+      }
+
       setLoading(false);
     });
-    return () => sub.subscription.unsubscribe();
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const refresh = async () => {
-    if (session?.user) await loadProfile(session.user.id);
+    if (session?.user) {
+      await loadProfile(session.user.id);
+    }
   };
 
-    const value: AuthCtx = {
-      session,
-      user: session?.user ?? null,
-      profile,
-      roles,
-      loading,
-      isAuthed: !!session,
-      hasRole: (r) => roles.includes(r),
-      refresh,
-      signOut: async () => {
-        await supabase.auth.signOut();
-      },
-      tenantPending: profile?.tenant_status === "pending_approval" || profile?.tenant_status === "rejected",
-    };
+  const value: AuthCtx = {
+    session,
+    user: session?.user ?? null,
+    profile,
+    roles,
+    loading,
+    isAuthed: !!session,
+    hasRole: (r) => roles.includes(r),
+    refresh,
+    signOut: async () => {
+      await supabase.auth.signOut();
+    },
+    tenantPending:
+      profile?.tenant_status === "pending_approval" ||
+      profile?.tenant_status === "rejected",
+  };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

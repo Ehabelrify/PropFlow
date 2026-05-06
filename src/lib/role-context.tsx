@@ -122,12 +122,22 @@ export function RoleProvider({ children }: { children: ReactNode }) {
              authRoles.includes("leader") ? "leader" : "agent";
   }
 
-  const allLeads = isAuthed ? (dbLeads.length > 0 ? dbLeads.map(dbLeadToMockLead) : []) : [];
+  const allLeads = useMemo(() => {
+  if (!isAuthed) return [];
+  return dbLeads.map(dbLeadToMockLead);
+}, [isAuthed, dbLeads]);
 
   const value = useMemo<RoleContextValue>(() => {
-    if (!user) {
-      return { user: null!, orgRole, setUserId, has: () => false, scopedLeads: [], scopeLabel: "" };
-    }
+  if (!user) {
+    return {
+      user: null!,
+      orgRole,
+      setUserId,
+      has: () => false,
+      scopedLeads: [],
+      scopeLabel: "",
+    };
+  }
 
     const perms = new Set(ROLE_PERMS[orgRole]);
     const has = (p: Permission) => perms.has(p);
