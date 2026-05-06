@@ -7,8 +7,6 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { useRole, ORG_ROLE_LABEL } from "@/lib/role-context";
-import { useAuth } from "@/lib/auth-context";
-import { useTeams } from "@/hooks/use-supabase";
 import type { Permission } from "@/lib/role-context";
 
 type NavItem = { title: string; url: string; icon: any; exact?: boolean; perm?: Permission };
@@ -42,8 +40,6 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (r) => r.location.pathname });
   const { user, orgRole, has } = useRole();
-  const { profile } = useAuth();
-  const { data: teams = [] } = useTeams(profile?.tenant_id ?? undefined);
   const isActive = (url: string, exact?: boolean) =>
     exact ? path === url : path === url || path.startsWith(url + "/");
   const visible = (items: NavItem[]) => items.filter(i => !i.perm || has(i.perm));
@@ -153,7 +149,7 @@ export function AppSidebar() {
             <div className="flex min-w-0 flex-col leading-tight">
               <span className="truncate text-sm font-medium">{user?.name ?? "User"}</span>
               <span className="truncate text-[11px] text-muted-foreground">
-                {ORG_ROLE_LABEL[orgRole]}{user?.teamId ? ` · ${teams?.find?.(t => t.id === user.teamId)?.name ?? ""}` : ""}
+                {ORG_ROLE_LABEL[orgRole]}
               </span>
             </div>
           )}

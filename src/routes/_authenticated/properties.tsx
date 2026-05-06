@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useProperties } from "@/hooks/use-supabase";
 import { formatCurrency } from "@/lib/constants";
 import { NewPropertyDialog } from "@/components/crm/dialogs";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/_authenticated/properties")({
   head: () => ({ meta: [{ title: "Properties — PropFlow CRM" }] }),
@@ -13,7 +14,8 @@ export const Route = createFileRoute("/_authenticated/properties")({
 });
 
 function PropertiesPage() {
-  const { data: properties = [] } = useProperties();
+  const { profile } = useAuth();
+  const { data: properties = [] } = useProperties({ tenant_id: profile?.tenant_id, limit: 100 });
 
   return (
     <div>

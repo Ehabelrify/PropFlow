@@ -19,7 +19,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/lib/role-context";
 import { ORG_ROLE_LABEL } from "@/lib/role-context";
-import { useProfiles, useTeams, useTenants, useTenant, useInvitations, useCreateInvitation, useRevokeInvitation, useUpdateUserRole, useAssignTeam, useCreateTeam } from "@/hooks/use-supabase";
+import { useLeads, useProfiles, useTeams, useTenants, useTenant, useInvitations, useCreateInvitation, useRevokeInvitation, useUpdateUserRole, useAssignTeam, useCreateTeam } from "@/hooks/use-supabase";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/team")({
 
 function TeamPage() {
   const { profile } = useAuth();
-  const { scopedLeads, orgRole } = useRole();
+  const { orgRole } = useRole();
   const isSuperAdmin = orgRole === "super_admin";
   const isManager = orgRole === "manager";
   const isLeader = orgRole === "leader";
@@ -40,11 +40,12 @@ function TeamPage() {
 
   // Super admin sees all; manager sees only their tenant; leader sees all but can only invite to own team
   const tenantId = profile?.tenant_id ?? undefined;
-  const { data: profiles = [] } = useProfiles(isSuperAdmin ? undefined : tenantId);
+  const { data: profiles = [] } = useProfiles(tenantId);
   const { data: teams = [] } = useTeams(isSuperAdmin ? undefined : tenantId);
   const { data: allTenants = [] } = useTenants();
   const { data: currentTenant } = useTenant(tenantId);
   const { data: invitations = [] } = useInvitations(tenantId);
+  const { data: leads = [] } = useLeads(tenantId ? { tenant_id: tenantId } : undefined);
   const createInvitation = useCreateInvitation();
   const revokeInvitation = useRevokeInvitation();
   const updateRole = useUpdateUserRole();
@@ -66,6 +67,33 @@ function TeamPage() {
   const atCapacity = usedSeats >= totalSeats;
 
   const teamMap = new Map((teams as any[]).map((t: any) => [t.id, t]));
+
+  // Precompute lead stats once - O(leads) instead of O(users × leads)
+  const leadsByOwner = useMemo(() => {
+    const map = new Map<string, any[]>();
+    (leads ?? []).forEach((lead: any) => {
+      const ownerId = lead.assigned_to || lead.owner_id;
+      if (ownerId) {
+        if (!map.has(ownerId)) map.set(ownerId, []);
+        map.get(ownerId)!.push(lead);
+      }
+    });
+    return map;
+  }, [leads]);
+
+  const userStats = useMemo(() => {
+    const stats = new Map<string, { total: number; won: number; wonValue: number }>();
+    leadsByOwner.forEach((userLeads, userId) => {
+      const wonLeads = userLeads.filter((l: any) => l.stage === "won");
+      const wonValue = wonLeads.reduce((sum: number, l: any) => sum + (l.budget || 0), 0);
+      stats.set(userId, {
+        total: userLeads.length,
+        won: wonLeads.length,
+        wonValue,
+      });
+    });
+    return stats;
+  }, [leadsByOwner]);
 
   // Group profiles by team
   const profilesByTeam = useMemo(() => {
@@ -178,9 +206,8 @@ function TeamPage() {
 
   const renderAgentCard = (u: any) => {
     const role = (u.user_roles?.[0]?.role ?? "agent") as "super_admin" | "manager" | "leader" | "agent";
-    const ownedLeads = scopedLeads.filter(l => l.assignedTo === u.id);
-    const wonLeads = ownedLeads.filter(l => l.stage === "won");
-    const wonValue = wonLeads.reduce((s: number, l: any) => s + l.budget, 0);
+    // Use precomputed stats instead of filtering leads
+    const stats = userStats.get(u.id) || { total: 0, won: 0, wonValue: 0 };
 
     return (
       <Card key={u.id} className="border border-border/60 p-4">
@@ -217,9 +244,9 @@ function TeamPage() {
           <a href={`mailto:${u.email}`} className="hover:text-foreground flex items-center gap-1"><Mail className="h-3 w-3" /> Email</a>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <MiniStat label="Leads" value={String(ownedLeads.length)} />
-          <MiniStat label="Won" value={String(wonLeads.length)} />
-          <MiniStat label="Value" value={wonValue > 0 ? `EGP ${(wonValue / 1_000_000).toFixed(1)}M` : "—"} />
+          <MiniStat label="Leads" value={String(stats.total)} />
+          <MiniStat label="Won" value={String(stats.won)} />
+          <MiniStat label="Value" value={stats.wonValue > 0 ? `EGP ${(stats.wonValue / 1_000_000).toFixed(1)}M` : "—"} />
         </div>
       </Card>
     );

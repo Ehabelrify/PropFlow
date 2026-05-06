@@ -20,23 +20,29 @@ type ProfileUpdate = Tables["profiles"]["Update"];
 
 // ========= LEADS =========
 export function useLeads(filters?: {
+  tenant_id?: string;
   stage?: string;
   hot?: boolean;
   assigned_to?: string;
   team_id?: string;
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ["leads", filters],
     queryFn: async () => {
       let q = supabase.from("leads").select("*").order("created_at", { ascending: false });
+      if (filters?.tenant_id) q = q.eq("tenant_id", filters.tenant_id);
       if (filters?.stage) q = q.eq("stage", filters.stage);
       if (filters?.hot !== undefined) q = q.eq("hot", filters.hot);
       if (filters?.assigned_to) q = q.eq("assigned_to", filters.assigned_to);
       if (filters?.team_id) q = q.eq("team_id", filters.team_id);
+      if (filters?.limit) q = q.limit(filters.limit);
       const { data, error } = await q;
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
+    enabled: !!filters?.tenant_id, // Require tenant_id to prevent unfiltered queries
+    staleTime: 30_000,
   });
 }
 
@@ -71,7 +77,16 @@ export function useCreateLead() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+    onSuccess: (data) => {
+      // Narrow invalidation to only queries matching this tenant
+      qc.invalidateQueries({
+        queryKey: ["leads"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id;
+        }
+      });
+    },
   });
 }
 
@@ -84,18 +99,40 @@ export function useUpdateLead() {
       return data;
     },
     onMutate: async vars => {
+      // Cancel all lead queries for optimistic update
       await qc.cancelQueries({ queryKey: ["leads"] });
-      const previous = qc.getQueryData(["leads"]);
-      qc.setQueryData(["leads"], (old: any[] | undefined) =>
-        old?.map(l => l.id === vars.id ? { ...l, ...vars } : l)
-      );
-      return { previous };
+      const previousQueries: any[] = [];
+      
+      // Store all matching query data for rollback
+      qc.getQueryCache().findAll({ queryKey: ["leads"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        // Optimistically update matching queries
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.map(l => l.id === vars.id ? { ...l, ...vars } : l)
+        );
+      });
+      
+      return { previousQueries };
     },
     onError: (_err, _vars, context: any) => {
-      if (context?.previous) qc.setQueryData(["leads"], context.previous);
+      // Rollback all optimistic updates
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["leads"] });
+    onSuccess: (data, vars) => {
+      // Narrow invalidation to queries matching this tenant
+      qc.invalidateQueries({
+        queryKey: ["leads"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id;
+        }
+      });
       qc.invalidateQueries({ queryKey: ["lead", vars.id] });
     },
   });
@@ -105,18 +142,92 @@ export function useDeleteLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      // Fetch lead first to get tenant_id for narrow invalidation
+      const { data: lead } = await supabase.from("leads").select("tenant_id").eq("id", id).single();
       const { error } = await supabase.from("leads").delete().eq("id", id);
       if (error) throw error;
+      return lead;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["leads"] });
+      const previousQueries: any[] = [];
+      
+      // Optimistically remove from all matching queries
+      qc.getQueryCache().findAll({ queryKey: ["leads"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.filter(l => l.id !== id)
+        );
+      });
+      
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
+    },
+    onSuccess: (lead) => {
+      if (lead?.tenant_id) {
+        qc.invalidateQueries({
+          queryKey: ["leads"],
+          predicate: (query) => {
+            const filters = query.queryKey[1] as any;
+            return filters?.tenant_id === lead.tenant_id;
+          }
+        });
+      }
+    },
   });
 }
+// ========= BULK OPERATIONS =========
+export function useBulkAssignLeads() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ lead_ids, assigned_to }: { lead_ids: string[]; assigned_to: string }) => {
+      const { error } = await supabase.rpc("bulk_assign_leads", {
+        _lead_ids: lead_ids,
+        _assigned_to: assigned_to,
+      });
+      if (error) throw error;
+      return { lead_ids, assigned_to };
+    },
+    onSuccess: (data) => {
+      // Invalidate all lead queries (batch operation affects multiple leads)
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+}
+
+export function useBulkMoveLeadsStage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ lead_ids, stage }: { lead_ids: string[]; stage: string }) => {
+      const { error } = await supabase.rpc("bulk_move_leads_stage", {
+        _lead_ids: lead_ids,
+        _stage: stage,
+      });
+      if (error) throw error;
+      return { lead_ids, stage };
+    },
+    onSuccess: (data) => {
+      // Invalidate all lead queries (batch operation affects multiple leads)
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+}
+
 
 // ========= PROPERTIES =========
 export function useProperties(filters?: {
   type?: string;
   status?: string;
   tenant_id?: string | null;
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ["properties", filters],
@@ -125,10 +236,13 @@ export function useProperties(filters?: {
       if (filters?.type) q = q.eq("type", filters.type);
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.tenant_id !== undefined) q = q.eq("tenant_id", filters.tenant_id);
+      if (filters?.limit) q = q.limit(filters.limit);
       const { data, error } = await q;
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
+    enabled: !!filters?.tenant_id,
+    staleTime: 60_000,
   });
 }
 
@@ -140,7 +254,16 @@ export function useCreateProperty() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["properties"] }),
+    onSuccess: (data) => {
+      // Narrow invalidation to queries matching this tenant
+      qc.invalidateQueries({
+        queryKey: ["properties"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id;
+        }
+      });
+    },
   });
 }
 
@@ -152,8 +275,36 @@ export function useUpdateProperty() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["properties"] });
+    onMutate: async vars => {
+      await qc.cancelQueries({ queryKey: ["properties"] });
+      const previousQueries: any[] = [];
+      
+      qc.getQueryCache().findAll({ queryKey: ["properties"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.map(p => p.id === vars.id ? { ...p, ...vars } : p)
+        );
+      });
+      
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
+    },
+    onSuccess: (data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["properties"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id;
+        }
+      });
       qc.invalidateQueries({ queryKey: ["property", vars.id] });
     },
   });
@@ -163,15 +314,50 @@ export function useDeleteProperty() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: property } = await supabase.from("properties").select("tenant_id").eq("id", id).single();
       const { error } = await supabase.from("properties").delete().eq("id", id);
       if (error) throw error;
+      return property;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["properties"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["properties"] });
+      const previousQueries: any[] = [];
+      
+      qc.getQueryCache().findAll({ queryKey: ["properties"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.filter(p => p.id !== id)
+        );
+      });
+      
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
+    },
+    onSuccess: (property) => {
+      if (property?.tenant_id) {
+        qc.invalidateQueries({
+          queryKey: ["properties"],
+          predicate: (query) => {
+            const filters = query.queryKey[1] as any;
+            return filters?.tenant_id === property.tenant_id;
+          }
+        });
+      }
+    },
   });
 }
 
 // ========= TASKS =========
 export function useTasks(filters?: {
+  tenant_id?: string;
   assigned_to?: string;
   status?: string;
   lead_id?: string;
@@ -179,33 +365,22 @@ export function useTasks(filters?: {
   return useQuery({
     queryKey: ["tasks", filters],
     queryFn: async () => {
-      let q = supabase.from("tasks").select("*").order("due_at", { ascending: true });
+      let q = supabase
+        .from("tasks")
+        .select("id, title, status, priority, due_at, lead_id, assigned_to, created_at, tenant_id")
+        .order("due_at", { ascending: true });
+
+      if (filters?.tenant_id) q = q.eq("tenant_id", filters.tenant_id);
       if (filters?.assigned_to) q = q.eq("assigned_to", filters.assigned_to);
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.lead_id) q = q.eq("lead_id", filters.lead_id);
-      const { data: tasks, error } = await q;
+
+      const { data, error } = await q;
       if (error) throw error;
-      
-      // Fetch profiles and leads separately
-      if (tasks && tasks.length > 0) {
-        const userIds = [...new Set(tasks.map((t: any) => t.assigned_to).filter(Boolean))];
-        const leadIds = [...new Set(tasks.map((t: any) => t.lead_id).filter(Boolean))];
-        
-        const { data: profiles } = await supabase.from("profiles").select("id, name, initials, avatar_color").in("id", userIds);
-        const { data: leads } = await supabase.from("leads").select("id, name, email").in("id", leadIds);
-        
-        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
-        const leadMap = new Map(leads?.map((l: any) => [l.id, l]) || []);
-        
-        tasks.forEach((t: any) => {
-          (t as any).assigned_user = profileMap.get(t.assigned_to) || null;
-          (t as any).lead = leadMap.get(t.lead_id) || null;
-        });
-      }
-      
-      return tasks;
+      return data ?? [];
     },
-    enabled: !!(filters?.lead_id || filters?.assigned_to || filters?.status),
+    enabled: !!filters?.tenant_id || !!filters?.lead_id || !!filters?.assigned_to,
+    staleTime: 30_000,
   });
 }
 
@@ -217,7 +392,18 @@ export function useCreateTask() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onSuccess: (data) => {
+      // Narrow invalidation to queries matching tenant, lead, or assignee
+      qc.invalidateQueries({
+        queryKey: ["tasks"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id ||
+                 filters?.lead_id === data.lead_id ||
+                 filters?.assigned_to === data.assigned_to;
+        }
+      });
+    },
   });
 }
 
@@ -229,8 +415,38 @@ export function useUpdateTask() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
+    onMutate: async vars => {
+      await qc.cancelQueries({ queryKey: ["tasks"] });
+      const previousQueries: any[] = [];
+      
+      qc.getQueryCache().findAll({ queryKey: ["tasks"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.map(t => t.id === vars.id ? { ...t, ...vars } : t)
+        );
+      });
+      
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
+    },
+    onSuccess: (data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["tasks"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id ||
+                 filters?.lead_id === data.lead_id ||
+                 filters?.assigned_to === data.assigned_to;
+        }
+      });
       qc.invalidateQueries({ queryKey: ["task", vars.id] });
     },
   });
@@ -240,67 +456,77 @@ export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: task } = await supabase.from("tasks").select("tenant_id, lead_id, assigned_to").eq("id", id).single();
       const { error } = await supabase.from("tasks").delete().eq("id", id);
       if (error) throw error;
+      return task;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["tasks"] });
+      const previousQueries: any[] = [];
+      
+      qc.getQueryCache().findAll({ queryKey: ["tasks"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.filter(t => t.id !== id)
+        );
+      });
+      
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
+    },
+    onSuccess: (task) => {
+      if (task) {
+        qc.invalidateQueries({
+          queryKey: ["tasks"],
+          predicate: (query) => {
+            const filters = query.queryKey[1] as any;
+            return filters?.tenant_id === task.tenant_id ||
+                   filters?.lead_id === task.lead_id ||
+                   filters?.assigned_to === task.assigned_to;
+          }
+        });
+      }
+    },
   });
 }
 
 // ========= APPOINTMENTS =========
 export function useAppointments(filters?: {
+  tenant_id?: string;
   assigned_to?: string;
   status?: string;
   lead_id?: string;
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ["appointments", filters],
     queryFn: async () => {
       let q = supabase
         .from("appointments")
-        .select("*")
+        .select("id, title, scheduled_at, status, location, lead_id, assigned_to, property_id, created_at, tenant_id")
         .order("scheduled_at", { ascending: true });
+
+      if (filters?.tenant_id) q = q.eq("tenant_id", filters.tenant_id);
       if (filters?.assigned_to) q = q.eq("assigned_to", filters.assigned_to);
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.lead_id) q = q.eq("lead_id", filters.lead_id);
-      const { data: appointments, error } = await q;
+      if (filters?.limit) q = q.limit(filters.limit);
+
+      const { data, error } = await q;
       if (error) throw error;
-      
-      // Fetch profiles and leads separately
-      if (appointments && appointments.length > 0) {
-        const userIds = [...new Set(appointments.map((a: any) => a.assigned_to).filter(Boolean))];
-        const leadIds = [...new Set(appointments.map((a: any) => a.lead_id).filter(Boolean))];
-        const propertyIds = [...new Set(appointments.map((a: any) => a.property_id).filter(Boolean))];
-        
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, name, initials, avatar_color")
-          .in("id", userIds);
-        
-        const { data: leads } = await supabase
-          .from("leads")
-          .select("id, name, email")
-          .in("id", leadIds);
-        
-        const { data: properties } = await supabase
-          .from("properties")
-          .select("id, title")
-          .in("id", propertyIds);
-        
-        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
-        const leadMap = new Map(leads?.map((l: any) => [l.id, l]) || []);
-        const propertyMap = new Map(properties?.map((p: any) => [p.id, p]) || []);
-        
-        appointments.forEach((a: any) => {
-          (a as any).assigned_user = profileMap.get(a.assigned_to) || null;
-          (a as any).lead = leadMap.get(a.lead_id) || null;
-          (a as any).property = propertyMap.get(a.property_id) || null;
-        });
-      }
-      
-      return appointments;
+      return data ?? [];
     },
-    enabled: !!(filters?.lead_id || filters?.assigned_to || filters?.status),
+    enabled: !!filters?.tenant_id || !!filters?.lead_id || !!filters?.assigned_to,
+    staleTime: 30_000,
   });
 }
 
@@ -312,7 +538,18 @@ export function useCreateAppointment() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["appointments"] }),
+    onSuccess: (data) => {
+      // Narrow invalidation to queries matching tenant, lead, or assignee
+      qc.invalidateQueries({
+        queryKey: ["appointments"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id ||
+                 filters?.lead_id === data.lead_id ||
+                 filters?.assigned_to === data.assigned_to;
+        }
+      });
+    },
   });
 }
 
@@ -324,8 +561,38 @@ export function useUpdateAppointment() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["appointments"] });
+    onMutate: async vars => {
+      await qc.cancelQueries({ queryKey: ["appointments"] });
+      const previousQueries: any[] = [];
+      
+      qc.getQueryCache().findAll({ queryKey: ["appointments"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.map(a => a.id === vars.id ? { ...a, ...vars } : a)
+        );
+      });
+      
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
+    },
+    onSuccess: (data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["appointments"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id ||
+                 filters?.lead_id === data.lead_id ||
+                 filters?.assigned_to === data.assigned_to;
+        }
+      });
       qc.invalidateQueries({ queryKey: ["appointment", vars.id] });
     },
   });
@@ -335,10 +602,46 @@ export function useDeleteAppointment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: appointment } = await supabase.from("appointments").select("tenant_id, lead_id, assigned_to").eq("id", id).single();
       const { error } = await supabase.from("appointments").delete().eq("id", id);
       if (error) throw error;
+      return appointment;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["appointments"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["appointments"] });
+      const previousQueries: any[] = [];
+      
+      qc.getQueryCache().findAll({ queryKey: ["appointments"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.filter(a => a.id !== id)
+        );
+      });
+      
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
+    },
+    onSuccess: (appointment) => {
+      if (appointment) {
+        qc.invalidateQueries({
+          queryKey: ["appointments"],
+          predicate: (query) => {
+            const filters = query.queryKey[1] as any;
+            return filters?.tenant_id === appointment.tenant_id ||
+                   filters?.lead_id === appointment.lead_id ||
+                   filters?.assigned_to === appointment.assigned_to;
+          }
+        });
+      }
+    },
   });
 }
 
@@ -383,9 +686,11 @@ export function useCreateActivity() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["activities"] });
-      qc.invalidateQueries({ queryKey: ["activities", vars.lead_id] });
+    onSuccess: (data) => {
+      // Only invalidate the specific lead's activities
+      if (data.lead_id) {
+        qc.invalidateQueries({ queryKey: ["activities", data.lead_id] });
+      }
     },
   });
 }
@@ -444,7 +749,17 @@ export function useCreateApproval() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["approvals"] }),
+    onSuccess: (data) => {
+      // Narrow invalidation to queries matching this tenant or status
+      qc.invalidateQueries({
+        queryKey: ["approvals"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          // Invalidate if no filters (all approvals) or matching status
+          return !filters || filters.status === data.status;
+        }
+      });
+    },
   });
 }
 
@@ -462,7 +777,30 @@ export function useDecideApproval() {
       if (error) throw error;
       return data;
     },
+    onMutate: async ({ id, status }) => {
+      await qc.cancelQueries({ queryKey: ["approvals"] });
+      const previousQueries: any[] = [];
+      
+      qc.getQueryCache().findAll({ queryKey: ["approvals"] }).forEach(query => {
+        const data = query.state.data;
+        previousQueries.push({ key: query.queryKey, data });
+        
+        qc.setQueryData(query.queryKey, (old: any[] | undefined) =>
+          old?.map(a => a.id === id ? { ...a, status } : a)
+        );
+      });
+      
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ key, data }: any) => {
+          qc.setQueryData(key, data);
+        });
+      }
+    },
     onSuccess: () => {
+      // Invalidate all approval queries since status changed
       qc.invalidateQueries({ queryKey: ["approvals"] });
     },
   });
@@ -512,9 +850,15 @@ export function useCreateTeam() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      // Invalidate all team queries regardless of tenant_id
-      qc.invalidateQueries({ queryKey: ["teams"] });
+    onSuccess: (data) => {
+      // Narrow invalidation to queries matching this tenant
+      qc.invalidateQueries({
+        queryKey: ["teams"],
+        predicate: (query) => {
+          const tenantId = query.queryKey[1];
+          return tenantId === data.tenant_id || !tenantId;
+        }
+      });
     },
   });
 }
@@ -582,36 +926,56 @@ export function useApproveTenant() {
       if (error) throw error;
       return data;
     },
+    onMutate: async ({ id, approve }) => {
+      await qc.cancelQueries({ queryKey: ["tenants"] });
+      const previous = qc.getQueryData(["tenants"]);
+      
+      qc.setQueryData(["tenants"], (old: any[] | undefined) =>
+        old?.map(t => t.id === id ? { ...t, status: approve ? "active" : "rejected" } : t)
+      );
+      
+      return { previous };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previous) {
+        qc.setQueryData(["tenants"], context.previous);
+      }
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tenants"] }),
   });
 }
 
 // ========= PROFILES =========
-export function useProfiles(tenantId?: string) {
+export function useProfiles(tenant_id?: string) {
   return useQuery({
-    queryKey: ["profiles", tenantId],
+    queryKey: ["profiles", tenant_id],
     queryFn: async () => {
-      // Fetch profiles - RLS handles tenant filtering
-      let q = supabase.from("profiles").select("*").order("name");
-      if (tenantId) q = q.eq("tenant_id", tenantId);
+      // Build query with explicit field selection
+      let q = supabase
+        .from("profiles")
+        .select("id, name, email, initials, avatar_color, team_id, tenant_id");
+      
+      if (tenant_id) q = q.eq("tenant_id", tenant_id);
+      
       const { data: profiles, error } = await q;
       if (error) throw error;
-      
-      // Fetch roles separately
-      if (profiles && profiles.length > 0) {
-        const { data: roles } = await supabase
-          .from("user_roles")
-          .select("user_id, role")
-          .in("user_id", profiles.map(p => p.id));
-        
-        const roleMap = new Map(roles?.map(r => [r.user_id, r.role]) || []);
-        profiles.forEach(p => {
-          (p as any).user_roles = [{ role: roleMap.get(p.id) || 'agent' }];
-        });
-      }
-      
+      if (!profiles) return [];
+
+      // Fetch roles only for these specific profiles
+      const profileIds = profiles.map((p: any) => p.id);
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id, role")
+        .in("user_id", profileIds);
+
+      profiles.forEach((p: any) => {
+        p.user_roles = roles?.filter((r: any) => r.user_id === p.id) || [];
+      });
+
       return profiles;
     },
+    enabled: !!tenant_id,
+    staleTime: 60_000, // 1 minute - profiles don't change often
   });
 }
 
@@ -623,11 +987,40 @@ export function useUpdateProfile() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["profiles"] });
-      qc.invalidateQueries({ queryKey: ["leads"] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      qc.invalidateQueries({ queryKey: ["appointments"] });
+    onSuccess: (data) => {
+      // Narrow invalidation to queries matching this tenant
+      qc.invalidateQueries({
+        queryKey: ["profiles"],
+        predicate: (query) => {
+          const tenantId = query.queryKey[1];
+          return tenantId === data.tenant_id;
+        }
+      });
+      
+      // Invalidate related queries for this tenant only
+      qc.invalidateQueries({
+        queryKey: ["leads"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id || filters?.assigned_to === data.id;
+        }
+      });
+      
+      qc.invalidateQueries({
+        queryKey: ["tasks"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id || filters?.assigned_to === data.id;
+        }
+      });
+      
+      qc.invalidateQueries({
+        queryKey: ["appointments"],
+        predicate: (query) => {
+          const filters = query.queryKey[1] as any;
+          return filters?.tenant_id === data.tenant_id || filters?.assigned_to === data.id;
+        }
+      });
     },
   });
 }
@@ -696,7 +1089,10 @@ export function useCreateInvitation() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ["invitations", vars.tenant_id] }),
+    onSuccess: (data) => {
+      // Only invalidate queries for this specific tenant
+      qc.invalidateQueries({ queryKey: ["invitations", data.tenant_id] });
+    },
   });
 }
 
@@ -706,8 +1102,26 @@ export function useRevokeInvitation() {
     mutationFn: async ({ id, tenant_id }: { id: string; tenant_id: string }) => {
       const { error } = await supabase.from("invitations").update({ is_active: false }).eq("id", id);
       if (error) throw error;
+      return tenant_id;
     },
-    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ["invitations", vars.tenant_id] }),
+    onMutate: async ({ id, tenant_id }) => {
+      await qc.cancelQueries({ queryKey: ["invitations", tenant_id] });
+      const previous = qc.getQueryData(["invitations", tenant_id]);
+      
+      qc.setQueryData(["invitations", tenant_id], (old: any[] | undefined) =>
+        old?.map(inv => inv.id === id ? { ...inv, is_active: false } : inv)
+      );
+      
+      return { previous, tenant_id };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previous && context?.tenant_id) {
+        qc.setQueryData(["invitations", context.tenant_id], context.previous);
+      }
+    },
+    onSuccess: (tenant_id) => {
+      qc.invalidateQueries({ queryKey: ["invitations", tenant_id] });
+    },
   });
 }
 
@@ -722,7 +1136,9 @@ export function useRedeemInvitation() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Invalidate profiles and teams - these are already tenant-scoped in queries
+      // so no need for predicate filtering
       qc.invalidateQueries({ queryKey: ["profiles"] });
       qc.invalidateQueries({ queryKey: ["teams"] });
     },
@@ -789,10 +1205,14 @@ export function useUpdateUserRole() {
       await supabase.from("user_roles").delete().eq("user_id", userId);
       const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
       if (error) throw error;
+      return { userId, role };
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["profiles", profile?.tenant_id] });
-      qc.invalidateQueries({ queryKey: ["teams", profile?.tenant_id] });
+      // Only invalidate queries for the current tenant
+      if (profile?.tenant_id) {
+        qc.invalidateQueries({ queryKey: ["profiles", profile.tenant_id] });
+        qc.invalidateQueries({ queryKey: ["teams", profile.tenant_id] });
+      }
     },
   });
 }
@@ -804,10 +1224,14 @@ export function useAssignTeam() {
     mutationFn: async ({ userId, teamId }: { userId: string; teamId: string | null }) => {
       const { error } = await supabase.from("profiles").update({ team_id: teamId }).eq("id", userId);
       if (error) throw error;
+      return { userId, teamId };
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["profiles", profile?.tenant_id] });
-      qc.invalidateQueries({ queryKey: ["teams", profile?.tenant_id] });
+      // Only invalidate queries for the current tenant
+      if (profile?.tenant_id) {
+        qc.invalidateQueries({ queryKey: ["profiles", profile.tenant_id] });
+        qc.invalidateQueries({ queryKey: ["teams", profile.tenant_id] });
+      }
     },
   });
 }

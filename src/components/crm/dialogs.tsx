@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useRole } from "@/lib/role-context";
 import { useAuth } from "@/lib/auth-context";
-import { useProfiles, useCreateLead, useCreateActivity, useCreateTask, useCreateAppointment, useCreateProperty, useUpdateLead, useTenants, useProperties } from "@/hooks/use-supabase";
+import { useProfiles, useCreateLead, useCreateActivity, useCreateTask, useCreateAppointment, useCreateProperty, useUpdateLead, useTenants, useProperties, useBulkAssignLeads, useBulkMoveLeadsStage } from "@/hooks/use-supabase";
 import { PIPELINE_STAGES } from "@/lib/constants";
 import { toast } from "sonner";
 import type { LeadSource, LeadStage, TaskPriority, PropertyType, PropertyStatus } from "@/lib/types";
@@ -494,22 +494,26 @@ export function ProvisionTenantDialog({ trigger }: { trigger: ReactNode }) {
 
 export function BulkAssignDialog({ trigger, ids, onDone }: { trigger: ReactNode; ids: string[]; onDone?: () => void }) {
   const { profile } = useAuth();
-  const updateLead = useUpdateLead();
+  const bulkAssign = useBulkAssignLeads();
   const { data: profiles = [] } = useProfiles(profile?.tenant_id ?? undefined);
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState("");
 
   const submit = () => {
     if (!userId) return;
-    let count = 0;
-    ids.forEach(id => {
-      updateLead.mutate({ id, assigned_to: userId }, {
-        onSuccess: () => { count++; },
-      });
-    });
-    toast.success(`${ids.length} lead${ids.length > 1 ? "s" : ""} reassigned`);
-    setOpen(false);
-    onDone?.();
+    bulkAssign.mutate(
+      { lead_ids: ids, assigned_to: userId },
+      {
+        onSuccess: () => {
+          toast.success(`${ids.length} lead${ids.length > 1 ? "s" : ""} reassigned`);
+          setOpen(false);
+          onDone?.();
+        },
+        onError: (error: any) => {
+          toast.error(error.message || "Failed to assign leads");
+        },
+      }
+    );
   };
 
   const assignable = profiles.filter((p: any) => (p.user_roles?.[0]?.role === "agent" || p.user_roles?.[0]?.role === "leader" || p.user_roles?.[0]?.role === "manager"));
@@ -528,7 +532,9 @@ export function BulkAssignDialog({ trigger, ids, onDone }: { trigger: ReactNode;
         </Select>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={submit} className="bg-gradient-brand text-primary-foreground">Assign</Button>
+          <Button onClick={submit} disabled={bulkAssign.isPending} className="bg-gradient-brand text-primary-foreground">
+            {bulkAssign.isPending ? "Assigning..." : "Assign"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -536,17 +542,24 @@ export function BulkAssignDialog({ trigger, ids, onDone }: { trigger: ReactNode;
 }
 
 export function BulkStageDialog({ trigger, ids, onDone }: { trigger: ReactNode; ids: string[]; onDone?: () => void }) {
-  const updateLead = useUpdateLead();
+  const bulkMoveStage = useBulkMoveLeadsStage();
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<LeadStage>("contacted");
 
   const submit = () => {
-    ids.forEach(id => {
-      updateLead.mutate({ id, stage });
-    });
-    toast.success(`${ids.length} lead${ids.length > 1 ? "s" : ""} moved`);
-    setOpen(false);
-    onDone?.();
+    bulkMoveStage.mutate(
+      { lead_ids: ids, stage },
+      {
+        onSuccess: () => {
+          toast.success(`${ids.length} lead${ids.length > 1 ? "s" : ""} moved to ${stage}`);
+          setOpen(false);
+          onDone?.();
+        },
+        onError: (error: any) => {
+          toast.error(error.message || "Failed to move leads");
+        },
+      }
+    );
   };
 
   return (
@@ -562,7 +575,9 @@ export function BulkStageDialog({ trigger, ids, onDone }: { trigger: ReactNode; 
         </Select>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={submit} className="bg-gradient-brand text-primary-foreground">Move</Button>
+          <Button onClick={submit} disabled={bulkMoveStage.isPending} className="bg-gradient-brand text-primary-foreground">
+            {bulkMoveStage.isPending ? "Moving..." : "Move"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

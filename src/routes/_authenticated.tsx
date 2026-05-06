@@ -38,12 +38,12 @@ function AuthLayout() {
     const interval = setInterval(async () => {
       const { data } = await supabase.from("tenants").select("status").eq("id", profile.tenant_id).maybeSingle();
       if (data?.status === "active") {
-        await refresh();
-        window.location.reload();
+        await refresh(); // Refresh auth/profile state
+        navigate({ to: "/" }); // Navigate in-app to dashboard without reload
       }
     }, 10000);
     return () => clearInterval(interval);
-  }, [tenantPending, profile?.tenant_id, refresh]);
+  }, [tenantPending, profile?.tenant_id, refresh, navigate]);
 
   if (loading || !isAuthed) {
     return (

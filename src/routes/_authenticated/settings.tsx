@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Copy, Code2, User, Mail, Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/lib/role-context";
-import { useUpdateProfile, useTenants, useUpdateTenant } from "@/hooks/use-supabase";
+import { useUpdateProfile, useTenant, useUpdateTenant } from "@/hooks/use-supabase";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -21,10 +21,8 @@ function SettingsPage() {
   const { profile, user: authUser, refresh } = useAuth();
   const { orgRole } = useRole();
   const updateProfile = useUpdateProfile();
-  const { data: tenants = [] } = useTenants();
+  const { data: tenant } = useTenant(profile?.tenant_id);
   const updateTenant = useUpdateTenant();
-
-  const tenant = (tenants as any[]).find(t => t.id === profile?.tenant_id);
 
   const [editName, setEditName] = useState(profile?.name ?? "");
   const [savingProfile, setSavingProfile] = useState(false);

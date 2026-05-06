@@ -95,8 +95,8 @@ function LeadDetail() {
   const { data: activities = [] } = useActivities(leadId);
   const { data: tasks = [] } = useTasks({ lead_id: leadId });
   const { data: appointments = [] } = useAppointments({ lead_id: leadId });
-  const { data: properties = [] } = useProperties();
-  const { data: profiles = [] } = useProfiles(profile?.tenant_id ?? undefined);
+  const { data: properties = [] } = useProperties({ tenant_id: lead?.tenant_id, limit: 50 });
+  const { data: profiles = [] } = useProfiles(lead?.tenant_id);
   const updateLead = useUpdateLead();
   const createActivity = useCreateActivity();
 

@@ -91,13 +91,14 @@ function ProfileDropdown() {
 }
 
 function NotificationsButton() {
+  const [notificationsOpened, setNotificationsOpened] = useState(false);
   const { scopedLeads } = useRole();
-  const { data: tasks = [] } = useTasks();
+  const { data: tasks = [] } = useTasks(notificationsOpened ? {} : undefined);
   const overdueCount = (tasks as any[]).filter(t => t.status !== "done" && new Date(t.due_at) < new Date()).length;
   const hotCount = scopedLeads.filter(l => l.hot).length;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild onClick={() => setNotificationsOpened(true)}>
         <Button size="sm" variant="ghost" className="relative h-9 w-9 p-0">
           <Bell className="h-4 w-4" />
           {overdueCount + hotCount > 0 && <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-hot" />}

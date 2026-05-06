@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search, Download, Plus, Phone, Mail, Trash2, Upload } from "lucide-react";
 import { PIPELINE_STAGES, formatCurrency } from "@/lib/constants";
 import { useRole } from "@/lib/role-context";
@@ -47,6 +48,9 @@ function LeadsInbox() {
   const [stage, setStage] = useState<LeadStage | "all">("all");
   const [hotOnly, setHotOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  
+  // Ref for the scrollable container
+  const parentRef = useRef<HTMLDivElement>(null);
 
   const activeQuery = query || q;
 
@@ -61,6 +65,14 @@ function LeadsInbox() {
       return true;
     });
   }, [activeQuery, stage, hotOnly, scopedLeads]);
+
+  // Set up virtualizer for the table rows
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60, // estimated row height in pixels
+    overscan: 5, // render 5 extra items above/below viewport
+  });
 
   const toggle = (id: string) => {
     const n = new Set(selected);
@@ -166,47 +178,80 @@ function LeadsInbox() {
                 <th className="w-24 px-3 py-2.5"></th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.map(lead => {
+          </table>
+          
+          {/* Virtualized scrollable container */}
+          <div
+            ref={parentRef}
+            className="h-[calc(100vh-320px)] overflow-auto"
+            style={{ contain: 'strict' }}
+          >
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const lead = filtered[virtualRow.index];
                 const owner = getOwner(lead.assignedTo);
+                
                 return (
-                  <tr key={lead.id} className="group border-t transition-colors hover:bg-muted/30">
-                    <td className="px-3 py-3"><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggle(lead.id)} /></td>
-                    <td className="px-3 py-3">
-                      <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="flex items-center gap-2">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-foreground hover:text-primary">{lead.name}</span>
-                            {lead.hot && <HotBadge />}
-                          </div>
-                          <div className="text-xs text-muted-foreground">{lead.email}</div>
-                        </div>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3"><StageBadge stage={lead.stage} /></td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
-                          <div className={`h-full rounded-full ${lead.score >= 75 ? `bg-success` : lead.score >= 50 ? `bg-warning` : `bg-muted-foreground/40`}`} style={{ width: `${lead.score}%` }} />
-                        </div>
-                        <span className="text-xs tabular-nums text-muted-foreground">{lead.score}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 font-medium tabular-nums">{formatCurrency(lead.budget)}</td>
-                    <td className="px-3 py-3 capitalize text-muted-foreground">{lead.source}</td>
-                    <td className="px-3 py-3">{owner && <div className="flex items-center gap-2"><UserAvatar userId={owner.id} /><span className="text-xs">{owner.name.split(" ")[0]}</span></div>}</td>
-                    <td className="px-3 py-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(lead.lastActivityAt), { addSuffix: true })}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                        <LogActivityDialog leadId={lead.id} type="call" title="Log call" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Phone className="h-3.5 w-3.5" /></Button>} />
-                        <LogActivityDialog leadId={lead.id} type="email" title="Log email" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Mail className="h-3.5 w-3.5" /></Button>} />
-                      </div>
-                    </td>
-                  </tr>
+                  <div
+                    key={virtualRow.key}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <table className="w-full text-sm">
+                      <tbody>
+                        <tr className="group border-t transition-colors hover:bg-muted/30">
+                          <td className="w-10 px-3 py-3"><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggle(lead.id)} /></td>
+                          <td className="px-3 py-3">
+                            <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="flex items-center gap-2">
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium text-foreground hover:text-primary">{lead.name}</span>
+                                  {lead.hot && <HotBadge />}
+                                </div>
+                                <div className="text-xs text-muted-foreground">{lead.email}</div>
+                              </div>
+                            </Link>
+                          </td>
+                          <td className="px-3 py-3"><StageBadge stage={lead.stage} /></td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
+                                <div className={`h-full rounded-full ${lead.score >= 75 ? `bg-success` : lead.score >= 50 ? `bg-warning` : `bg-muted-foreground/40`}`} style={{ width: `${lead.score}%` }} />
+                              </div>
+                              <span className="text-xs tabular-nums text-muted-foreground">{lead.score}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 font-medium tabular-nums">{formatCurrency(lead.budget)}</td>
+                          <td className="px-3 py-3 capitalize text-muted-foreground">{lead.source}</td>
+                          <td className="px-3 py-3">{owner && <div className="flex items-center gap-2"><UserAvatar userId={owner.id} /><span className="text-xs">{owner.name.split(" ")[0]}</span></div>}</td>
+                          <td className="px-3 py-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(lead.lastActivityAt), { addSuffix: true })}</td>
+                          <td className="w-24 px-3 py-3">
+                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                              <LogActivityDialog leadId={lead.id} type="call" title="Log call" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Phone className="h-3.5 w-3.5" /></Button>} />
+                              <LogActivityDialog leadId={lead.id} type="email" title="Log email" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Mail className="h-3.5 w-3.5" /></Button>} />
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          </div>
+          
           {filtered.length === 0 && (
             <div className="p-12 text-center text-sm text-muted-foreground">No leads match your filters.</div>
           )}

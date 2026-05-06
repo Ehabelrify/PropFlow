@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { TrendingUp, TrendingDown, Users, Target, Calendar, Flame, ArrowRight, CheckCircle2, Clock } from "lucide-react";
 import { PIPELINE_STAGES, formatCurrency } from "@/lib/constants";
+import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/lib/role-context";
-import { useDashboardStats, useActivities, useAppointments, useTasks } from "@/hooks/use-supabase";
+import { useDashboardStats, useActivities, useAppointments, useTasks, useLeads } from "@/hooks/use-supabase";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,28 +46,93 @@ function KpiCard({
 }
 
 function Dashboard() {
-  const { user, orgRole, scopedLeads, scopeLabel } = useRole();
+  const { profile, user } = useAuth();
+  const { has, orgRole, scopeLabel } = useRole();
   const { data: stats, isLoading } = useDashboardStats();
+  
+  // Direct lead query with proper tenant_id filter
+  const leadFilters = useMemo(() => {
+    if (!profile?.tenant_id) return undefined;
+    return {
+      tenant_id: profile.tenant_id,
+      assigned_to: has("tenant.view_all_leads") ? undefined : user?.id,
+    };
+  }, [profile?.tenant_id, has, user?.id]);
+  
+  const { data: leads = [] } = useLeads(leadFilters);
   const { data: activities = [] } = useActivities();
-  const { data: appointments = [] } = useAppointments({ status: "scheduled" });
-  const { data: tasks = [] } = useTasks({ status: "open" });
+  const { data: appointments = [] } = useAppointments({
+    tenant_id: profile?.tenant_id,
+    status: "scheduled"
+  });
+  const { data: tasks = [] } = useTasks({
+    tenant_id: profile?.tenant_id,
+    status: "open"
+  });
 
-  const leads = scopedLeads;
+  // Memoized computations
   const totalLeads = stats?.totalLeads ?? leads.length;
-  const hotLeads = leads.filter(l => l.hot).length;
-  const wonValue = stats?.wonRevenue ?? leads.filter(l => l.stage === "won").reduce((s, l) => s + l.budget, 0);
-  const pipelineValue = stats?.pipelineValue ?? leads.reduce((s, l) => s + l.budget, 0);
-  const leadIds = new Set(leads.map(l => l.id));
-  const upcoming = (appointments ?? []).filter(a => a.status === "scheduled" && orgRole === "super_admin" || (leadIds.has(a.lead_id) || a.assigned_to === (user?.id ?? ""))).slice(0, 4);
-  const overdueTasks = (tasks ?? []).filter(t => t.status !== "done" && new Date(t.due_at) < new Date() && (orgRole === "super_admin" || (t.lead_id && leadIds.has(t.lead_id)) || t.assigned_to === (user?.id ?? "")));
-  const recentActivity = (activities ?? []).filter(a => orgRole === "super_admin" || leadIds.has(a.lead_id)).slice(0, 6);
+  
+  const hotLeads = useMemo(() =>
+    leads.filter(l => l.hot).length,
+    [leads]
+  );
+  
+  const wonValue = useMemo(() =>
+    stats?.wonRevenue ?? leads.filter(l => l.stage === "won").reduce((s, l) => s + l.budget, 0),
+    [stats?.wonRevenue, leads]
+  );
+  
+  const pipelineValue = useMemo(() =>
+    stats?.pipelineValue ?? leads.reduce((s, l) => s + l.budget, 0),
+    [stats?.pipelineValue, leads]
+  );
+  
+  const leadIds = useMemo(() =>
+    new Set(leads.map(l => l.id)),
+    [leads]
+  );
+  
+  // Fixed appointment filter with proper precedence
+  const upcoming = useMemo(() =>
+    (appointments ?? [])
+      .filter(
+        (a) =>
+          a.status === "scheduled" &&
+          (
+            orgRole === "super_admin" ||
+            leadIds.has(a.lead_id) ||
+            a.assigned_to === (user?.id ?? "")
+          )
+      )
+      .slice(0, 4),
+    [appointments, orgRole, leadIds, user?.id]
+  );
+  
+  const overdueTasks = useMemo(() =>
+    (tasks ?? []).filter(t =>
+      t.status !== "done" &&
+      new Date(t.due_at) < new Date() &&
+      (orgRole === "super_admin" || (t.lead_id && leadIds.has(t.lead_id)) || t.assigned_to === (user?.id ?? ""))
+    ),
+    [tasks, orgRole, leadIds, user?.id]
+  );
+  
+  const recentActivity = useMemo(() =>
+    (activities ?? []).filter(a => orgRole === "super_admin" || leadIds.has(a.lead_id)).slice(0, 6),
+    [activities, orgRole, leadIds]
+  );
+  
   const getLead = (id: string) => leads.find(l => l.id === id);
 
   const byStage = stats?.byStage ?? {};
-  const stageBreakdown = PIPELINE_STAGES.map(s => ({
-    ...s,
-    count: byStage[s.id] ?? leads.filter(l => l.stage === s.id).length,
-  }));
+  const stageBreakdown = useMemo(() =>
+    PIPELINE_STAGES.map(s => ({
+      ...s,
+      count: byStage[s.id] ?? leads.filter(l => l.stage === s.id).length,
+    })),
+    [byStage, leads]
+  );
 
   if (isLoading) {
     return (

@@ -1,7 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import type { User, Lead } from "./types";
 import { useAuth, type AppRole } from "./auth-context";
-import { useLeads, useTeams } from "@/hooks/use-supabase";
 import type { Database } from "@/types/database";
 
 export function orgRoleOf(u: User | null | undefined): "super_admin" | "manager" | "leader" | "agent" {
@@ -93,9 +92,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const { profile, roles: authRoles, isAuthed, session } = useAuth();
   const [userId, setUserId] = useState<string>("");
 
-  const { data: dbLeads = [] } = useLeads();
-  const { data: dbTeams = [] } = useTeams(profile?.tenant_id ?? undefined);
-
   const authUser = useMemo<User | null>(() => {
     if (!session?.user) return null;
     const primaryRole = authRoles.includes("super_admin") ? "super_admin" :
@@ -122,47 +118,38 @@ export function RoleProvider({ children }: { children: ReactNode }) {
              authRoles.includes("leader") ? "leader" : "agent";
   }
 
-  const allLeads = useMemo(() => {
-  if (!isAuthed) return [];
-  return dbLeads.map(dbLeadToMockLead);
-}, [isAuthed, dbLeads]);
-
   const value = useMemo<RoleContextValue>(() => {
-  if (!user) {
-    return {
-      user: null!,
-      orgRole,
-      setUserId,
-      has: () => false,
-      scopedLeads: [],
-      scopeLabel: "",
-    };
-  }
+    if (!user) {
+      return {
+        user: null!,
+        orgRole,
+        setUserId,
+        has: () => false,
+        scopedLeads: [],
+        scopeLabel: "",
+      };
+    }
 
     const perms = new Set(ROLE_PERMS[orgRole]);
     const has = (p: Permission) => perms.has(p);
 
-    let scopedLeads: Lead[] = [];
+    // scopedLeads now empty - data fetching moved to route-level
+    const scopedLeads: Lead[] = [];
+    
+    // Keep scopeLabel logic based on role
     let scopeLabel = "";
- 
     if (orgRole === "super_admin") {
-      scopedLeads = allLeads;
       scopeLabel = "Platform-wide";
+    } else if (orgRole === "manager") {
+      scopeLabel = "All teams";
+    } else if (orgRole === "leader") {
+      scopeLabel = "My team";
     } else {
-      // All tenant roles (agent, leader, manager) see ALL leads in their tenant
-      scopedLeads = allLeads.filter(l => l.tenantId === user.tenantId);
-      if (orgRole === "manager") {
-        scopeLabel = "All teams";
-      } else if (orgRole === "leader") {
-        const team = (dbTeams || []).find(t => t.id === user.teamId);
-        scopeLabel = team ? `${team.name} team` : "My team";
-      } else {
-        scopeLabel = "All leads";
-      }
+      scopeLabel = "All leads";
     }
 
     return { user, orgRole, setUserId, has, scopedLeads, scopeLabel };
-  }, [user, orgRole, allLeads, dbTeams]);
+  }, [user, orgRole]);
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 }
