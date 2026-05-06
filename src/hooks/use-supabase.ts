@@ -179,33 +179,20 @@ export function useTasks(filters?: {
   return useQuery({
     queryKey: ["tasks", filters],
     queryFn: async () => {
-      let q = supabase.from("tasks").select("*").order("due_at", { ascending: true });
+      let q = supabase
+        .from("tasks")
+        .select("*")
+        .order("due_at", { ascending: true });
+
       if (filters?.assigned_to) q = q.eq("assigned_to", filters.assigned_to);
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.lead_id) q = q.eq("lead_id", filters.lead_id);
-      const { data: tasks, error } = await q;
+
+      const { data, error } = await q;
       if (error) throw error;
-      
-      // Fetch profiles and leads separately
-      if (tasks && tasks.length > 0) {
-        const userIds = [...new Set(tasks.map((t: any) => t.assigned_to).filter(Boolean))];
-        const leadIds = [...new Set(tasks.map((t: any) => t.lead_id).filter(Boolean))];
-        
-        const { data: profiles } = await supabase.from("profiles").select("id, name, initials, avatar_color").in("id", userIds);
-        const { data: leads } = await supabase.from("leads").select("id, name, email").in("id", leadIds);
-        
-        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
-        const leadMap = new Map(leads?.map((l: any) => [l.id, l]) || []);
-        
-        tasks.forEach((t: any) => {
-          (t as any).assigned_user = profileMap.get(t.assigned_to) || null;
-          (t as any).lead = leadMap.get(t.lead_id) || null;
-        });
-      }
-      
-      return tasks;
+
+      return data ?? [];
     },
-    enabled: !!(filters?.lead_id || filters?.assigned_to || filters?.status),
   });
 }
 
@@ -260,47 +247,16 @@ export function useAppointments(filters?: {
         .from("appointments")
         .select("*")
         .order("scheduled_at", { ascending: true });
+
       if (filters?.assigned_to) q = q.eq("assigned_to", filters.assigned_to);
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.lead_id) q = q.eq("lead_id", filters.lead_id);
-      const { data: appointments, error } = await q;
+
+      const { data, error } = await q;
       if (error) throw error;
-      
-      // Fetch profiles and leads separately
-      if (appointments && appointments.length > 0) {
-        const userIds = [...new Set(appointments.map((a: any) => a.assigned_to).filter(Boolean))];
-        const leadIds = [...new Set(appointments.map((a: any) => a.lead_id).filter(Boolean))];
-        const propertyIds = [...new Set(appointments.map((a: any) => a.property_id).filter(Boolean))];
-        
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, name, initials, avatar_color")
-          .in("id", userIds);
-        
-        const { data: leads } = await supabase
-          .from("leads")
-          .select("id, name, email")
-          .in("id", leadIds);
-        
-        const { data: properties } = await supabase
-          .from("properties")
-          .select("id, title")
-          .in("id", propertyIds);
-        
-        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
-        const leadMap = new Map(leads?.map((l: any) => [l.id, l]) || []);
-        const propertyMap = new Map(properties?.map((p: any) => [p.id, p]) || []);
-        
-        appointments.forEach((a: any) => {
-          (a as any).assigned_user = profileMap.get(a.assigned_to) || null;
-          (a as any).lead = leadMap.get(a.lead_id) || null;
-          (a as any).property = propertyMap.get(a.property_id) || null;
-        });
-      }
-      
-      return appointments;
+
+      return data ?? [];
     },
-    enabled: !!(filters?.lead_id || filters?.assigned_to || filters?.status),
   });
 }
 
@@ -392,49 +348,41 @@ export function useCreateActivity() {
 
   // ========= APPROVALS =========
 export function useApprovals(filters?: { status?: string }) {
-  const { profile, hasRole } = useAuth();
-  const isSuperAdmin = hasRole("super_admin");
   return useQuery({
     queryKey: ["approvals", filters],
     queryFn: async () => {
-      let q = supabase.from("approval_requests").select("*").order("created_at", { ascending: false });
-      if (!isSuperAdmin && profile?.tenant_id) q = q.eq("tenant_id", profile.tenant_id);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", userId || "")
+        .maybeSingle();
+
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId || "");
+
+      const isSuperAdmin = roles?.some(r => r.role === "super_admin");
+      const tenantId = profile?.tenant_id;
+
+      let q = supabase
+        .from("approval_requests")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!isSuperAdmin && tenantId) q = q.eq("tenant_id", tenantId);
       if (filters?.status) q = q.eq("status", filters.status);
-      const { data: approvals, error } = await q;
+
+      const { data, error } = await q;
       if (error) throw error;
 
-      // Fetch requester and decider profiles, plus requester roles
-      if (approvals && approvals.length > 0) {
-        const userIds = [
-          ...new Set([
-            ...approvals.map((a: any) => a.requester_id),
-            ...approvals.map((a: any) => a.decided_by).filter(Boolean)
-          ])
-        ];
-
-        const [
-          { data: profiles },
-          { data: roles }
-        ] = await Promise.all([
-          supabase.from("profiles").select("id, name, email").in("id", userIds),
-          supabase.from("user_roles").select("user_id, role").in("user_id", approvals.map((a: any) => a.requester_id))
-        ]);
-
-        const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
-        const roleMap = new Map(roles?.map((r: any) => [r.user_id, r.role]) || []);
-
-        approvals.forEach((a: any) => {
-          (a as any).requester = profileMap.get(a.requester_id) || null;
-          (a as any).decider = a.decided_by ? profileMap.get(a.decided_by) || null : null;
-          (a as any).requester_role = roleMap.get(a.requester_id) || "agent";
-        });
-      }
-
-      return approvals;
+      return data ?? [];
     },
   });
 }
-
 export function useCreateApproval() {
   const { user, profile } = useAuth();
   const qc = useQueryClient();
