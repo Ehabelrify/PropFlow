@@ -166,7 +166,7 @@ function Dashboard() {
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="p-5 shadow-card lg:col-span-2">
             <div className="mb-4 flex items-center justify-between">
-              <div>
+              <div className="space-y-0.5">
                 <h3 className="text-sm font-semibold">Lead flow</h3>
                 <p className="text-xs text-muted-foreground">Activity overview</p>
               </div>
@@ -179,7 +179,7 @@ function Dashboard() {
           </Card>
 
           <Card className="p-5 shadow-card">
-            <div className="mb-4">
+            <div className="mb-4 space-y-0.5">
               <h3 className="text-sm font-semibold">Pipeline breakdown</h3>
               <p className="text-xs text-muted-foreground">Leads by stage</p>
             </div>
@@ -204,19 +204,20 @@ function Dashboard() {
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="p-5 shadow-card lg:col-span-2">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Recent activity</h3>
               <Button variant="ghost" size="sm" className="text-xs">View all <ArrowRight className="ml-1 h-3 w-3" /></Button>
             </div>
             <ul className="space-y-3">
               {recentActivity.map(a => {
                 const lead = getLead(a.lead_id);
+                const activityUser = (a as any).user;
                 return (
                   <li key={a.id} className="flex items-start gap-3 rounded-lg p-2 hover:bg-muted/50">
-                    <UserAvatar userId={a.user_id} size="md" />
+                    <UserAvatar user={activityUser} size="md" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm">
-                        <span className="font-medium">{(a as any).user?.name ?? "Unknown"}</span>{" "}
+                        <span className="font-medium">{activityUser?.name ?? "Unknown"}</span>{" "}
                         <span className="text-muted-foreground">— {a.title}</span>{" "}
                         {lead && <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="font-medium text-primary hover:underline">{lead.name}</Link>}
                       </p>
@@ -232,7 +233,7 @@ function Dashboard() {
 
           <div className="space-y-4">
             <Card className="p-5 shadow-card">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2"><Calendar className="h-4 w-4 text-info" /> Upcoming visits</h3>
               </div>
               <ul className="space-y-2.5">
@@ -255,7 +256,7 @@ function Dashboard() {
               </ul>
             </Card>
             <Card className="p-5 shadow-card">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2"><Clock className="h-4 w-4 text-warning" /> Overdue tasks</h3>
                 <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">{overdueTasks.length}</span>
               </div>

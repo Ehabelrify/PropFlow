@@ -72,9 +72,9 @@ export function AppSidebar() {
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url, item.exact)} tooltip={item.title}>
-                    <Link to={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                    <Link to={item.url} className="flex items-center gap-2">
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -90,9 +90,9 @@ export function AppSidebar() {
                 {accountItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                      <Link to={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                      <Link to={item.url} className="flex items-center gap-2">
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -109,9 +109,9 @@ export function AppSidebar() {
                 {teamItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                      <Link to={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                      <Link to={item.url} className="flex items-center gap-2">
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -128,9 +128,9 @@ export function AppSidebar() {
                 {platformItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                      <Link to={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                      <Link to={item.url} className="flex items-center gap-2">
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
