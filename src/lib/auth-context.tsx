@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabase.from("user_roles").select("role").eq("user_id", uid),
       ]);
 
-      const activeSession = currentSession ?? session;
+      const activeSession = currentSession;
 
       // create profile if missing
       if (!p && activeSession?.user) {
@@ -127,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null);
           setRoles([]);
+          setLoading(false);
         }
       }
     );
@@ -153,8 +154,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = async () => {
-    if (session?.user) {
-      await loadProfile(session.user.id);
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) {
+      await loadProfile(data.session.user.id, data.session);
     }
   };
 
