@@ -119,7 +119,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(newSession);
 
         if (newSession?.user?.id) {
-          loadProfile(newSession.user.id, newSession);
+          // CRITICAL: defer supabase calls out of the auth callback to avoid
+          // deadlocking the GoTrue lock (otherwise signIn/signOut hang forever).
+          setTimeout(() => {
+            if (mounted) loadProfile(newSession.user.id, newSession);
+          }, 0);
         } else {
           setProfile(null);
           setRoles([]);
@@ -134,7 +138,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
 
       if (data.session?.user?.id) {
-        loadProfile(data.session.user.id, data.session);
+        setTimeout(() => {
+          if (mounted) loadProfile(data.session!.user.id, data.session);
+        }, 0);
       }
 
       setLoading(false);
