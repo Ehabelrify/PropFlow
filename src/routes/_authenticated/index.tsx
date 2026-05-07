@@ -60,7 +60,10 @@ function Dashboard() {
   }, [profile?.tenant_id, has, user?.id]);
   
   const { data: leads = [] } = useLeads(leadFilters);
-  const { data: activities = [] } = useActivities();
+  const { data: activities = [] } = useActivities({
+    tenant_id: profile?.tenant_id,
+    limit: 10
+  });
   const { data: appointments = [] } = useAppointments({
     tenant_id: profile?.tenant_id,
     status: "scheduled"

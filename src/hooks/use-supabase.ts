@@ -646,15 +646,19 @@ export function useDeleteAppointment() {
 }
 
 // ========= ACTIVITIES =========
-export function useActivities(leadId?: string) {
+export function useActivities(filters?: { lead_id?: string; tenant_id?: string; limit?: number }) {
   return useQuery({
-    queryKey: ["activities", leadId],
+    queryKey: ["activities", filters],
     queryFn: async () => {
       let q = supabase
         .from("activities")
         .select("*")
         .order("created_at", { ascending: false });
-      if (leadId) q = q.eq("lead_id", leadId);
+      
+      if (filters?.lead_id) q = q.eq("lead_id", filters.lead_id);
+      if (filters?.tenant_id) q = q.eq("tenant_id", filters.tenant_id);
+      if (filters?.limit) q = q.limit(filters.limit);
+      
       const { data: activities, error } = await q;
       if (error) throw error;
       
@@ -672,9 +676,10 @@ export function useActivities(leadId?: string) {
         });
       }
       
-      return activities;
+      return activities ?? [];
     },
-    enabled: !!leadId,
+    enabled: !!(filters?.lead_id || filters?.tenant_id),
+    staleTime: 30_000,
   });
 }
 
