@@ -64,8 +64,8 @@ export function AppSidebar() {
           )}
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
+      <SidebarContent className="py-2">
+        <SidebarGroup className="pb-2">
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -83,7 +83,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         {accountItems.length > 0 && (
-          <SidebarGroup>
+          <SidebarGroup className="pb-2">
             <SidebarGroupLabel>Account</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -102,7 +102,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
         {teamItems.length > 0 && (
-          <SidebarGroup>
+          <SidebarGroup className="pb-2">
             <SidebarGroupLabel>Organization</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -121,7 +121,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
         {platformItems.length > 0 && (
-          <SidebarGroup>
+          <SidebarGroup className="pb-2">
             <SidebarGroupLabel>Platform</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>

@@ -58,13 +58,13 @@ function ProfileDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex h-9 items-center gap-2 rounded-md border border-border/60 bg-card px-2.5 text-xs hover:bg-muted">
+        <button className="flex h-9 items-center gap-2.5 rounded-md border border-border/60 bg-card px-3 text-xs hover:bg-muted transition-colors">
           <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${avatarColor} text-[10px] font-semibold text-white`}>
             {initials}
           </div>
-          <span className="hidden sm:flex flex-col items-start leading-tight">
+          <span className="hidden sm:flex flex-col items-start leading-tight min-w-0">
             <span className="font-semibold truncate max-w-[120px]">{displayName.split(" ")[0]}</span>
-            <span className="text-[10px] text-muted-foreground">{ROLE_LABEL[orgRole as keyof typeof ROLE_LABEL] ?? orgRole}</span>
+            <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{ROLE_LABEL[orgRole as keyof typeof ROLE_LABEL] ?? orgRole}</span>
           </span>
         </button>
       </DropdownMenuTrigger>
