@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NewLeadDialog } from "@/components/crm/dialogs";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -93,7 +93,16 @@ function ProfileDropdown() {
 function NotificationsButton() {
   const [notificationsOpened, setNotificationsOpened] = useState(false);
   const { scopedLeads } = useRole();
-  const { data: tasks = [] } = useTasks(notificationsOpened ? {} : undefined);
+  const { profile } = useAuth();
+  
+  const taskFilters = useMemo(() =>
+    notificationsOpened && profile?.tenant_id
+      ? { tenant_id: profile.tenant_id, status: "open" as const }
+      : undefined,
+    [notificationsOpened, profile?.tenant_id]
+  );
+  
+  const { data: tasks = [] } = useTasks(taskFilters);
   const overdueCount = (tasks as any[]).filter(t => t.status !== "done" && new Date(t.due_at) < new Date()).length;
   const hotCount = scopedLeads.filter(l => l.hot).length;
   return (
