@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const activeSession = currentSession;
 
-      // Prepare all data first, then batch state updates
+      // Prepare all data first, then update state synchronously
       let profileToSet: Profile | null = null;
       let rolesToSet: AppRole[] = [];
 
@@ -103,19 +103,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         rolesToSet = ((r ?? []) as { role: AppRole }[]).map((x) => x.role);
       }
 
-      // Batch state updates in a single microtask to prevent React error #185
-      console.log(`[AUTH] Batching state updates...`);
-      Promise.resolve().then(() => {
-        setProfile(profileToSet);
-        setRoles(rolesToSet);
-        console.log(`[AUTH] loadProfile COMPLETE`, { duration: `${(performance.now() - startTime).toFixed(2)}ms` });
-      });
+      // Update state synchronously (not deferred)
+      console.log(`[AUTH] Updating profile and roles...`);
+      setProfile(profileToSet);
+      setRoles(rolesToSet);
+      console.log(`[AUTH] loadProfile COMPLETE`, { duration: `${(performance.now() - startTime).toFixed(2)}ms` });
     } catch (error) {
       console.error("Error loading profile:", error);
-      Promise.resolve().then(() => {
-        setProfile(null);
-        setRoles([]);
-      });
+      setProfile(null);
+      setRoles([]);
     }
   };
 
@@ -139,63 +135,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (!mounted) return;
 
-        // Defer state updates to next microtask to prevent React error #185
-        // when router is rendering during auth state changes
-        Promise.resolve().then(() => {
-          if (!mounted) return;
-          
-          setSession(newSession);
-          console.log(`[AUTH] Session state updated`, { isAuthed: !!newSession });
+        // Update session SYNCHRONOUSLY to prevent React error #185
+        // Only defer Supabase calls, not state updates
+        setSession(newSession);
+        console.log(`[AUTH] Session state updated`, { isAuthed: !!newSession });
 
-          if (newSession?.user?.id) {
-            // CRITICAL: defer supabase calls out of the auth callback to avoid
-            // deadlocking the GoTrue lock (otherwise signIn/signOut hang forever).
-            setTimeout(() => {
-              if (mounted) {
-                console.log(`[AUTH] Triggering loadProfile after timeout`);
-                loadProfile(newSession.user.id, newSession);
-              }
-            }, 0);
-          } else {
-            // Batch clear state updates
-            setProfile(null);
-            setRoles([]);
-            if (!initialLoadDone) {
-              setLoading(false);
-              initialLoadDone = true;
-            }
-          }
-        });
-      }
-    );
-
-    // Initial session load - also defer to prevent render conflicts
-    console.log(`[AUTH] Getting initial session...`);
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-
-      Promise.resolve().then(() => {
-        if (!mounted) return;
-
-        setSession(data.session);
-        console.log(`[AUTH] Initial session loaded`, { hasSession: !!data.session });
-
-        if (data.session?.user?.id) {
+        if (newSession?.user?.id) {
+          // CRITICAL: defer supabase calls out of the auth callback to avoid
+          // deadlocking the GoTrue lock (otherwise signIn/signOut hang forever).
           setTimeout(() => {
             if (mounted) {
-              console.log(`[AUTH] Triggering loadProfile from initial session`);
-              loadProfile(data.session!.user.id, data.session);
+              console.log(`[AUTH] Triggering loadProfile after timeout`);
+              loadProfile(newSession.user.id, newSession);
             }
           }, 0);
         } else {
-          // Only set loading false here if we haven't already done so via auth state change
+          // Batch clear state updates
+          setProfile(null);
+          setRoles([]);
           if (!initialLoadDone) {
-            console.log(`[AUTH] Initial load complete - no session found`);
             setLoading(false);
             initialLoadDone = true;
           }
         }
-      });
+      }
+    );
+
+    // Initial session load - update state synchronously, defer only Supabase calls
+    console.log(`[AUTH] Getting initial session...`);
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+
+      // Update session synchronously
+      setSession(data.session);
+      console.log(`[AUTH] Initial session loaded`, { hasSession: !!data.session });
+
+      if (data.session?.user?.id) {
+        setTimeout(() => {
+          if (mounted) {
+            console.log(`[AUTH] Triggering loadProfile from initial session`);
+            loadProfile(data.session!.user.id, data.session);
+          }
+        }, 0);
+      } else {
+        // Only set loading false here if we haven't already done so via auth state change
+        if (!initialLoadDone) {
+          console.log(`[AUTH] Initial load complete - no session found`);
+          setLoading(false);
+          initialLoadDone = true;
+        }
+      }
     });
 
     return () => {
