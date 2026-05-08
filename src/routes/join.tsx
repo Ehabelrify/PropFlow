@@ -19,7 +19,7 @@ export const Route = createFileRoute("/join")({
 
 function JoinPage() {
   const navigate = useNavigate();
-  const { isAuthed, loading, profile, refresh } = useAuth();
+  const { isAuthed, loading, profile, refresh, user } = useAuth();
   const redeem = useRedeemInvitation();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,8 +33,9 @@ function JoinPage() {
 
   const handleSubmit = async () => {
     if (!code.trim()) return toast.error("Enter an invitation code");
+    if (!user?.id) return toast.error("Sign in required");
     setBusy(true);
-    redeem.mutate(code.trim().toUpperCase(), {
+    redeem.mutate({ code: code.trim().toUpperCase(), userId: user.id }, {
       onSuccess: async () => {
         toast.success("Joined workspace!");
         setSuccess(true);
