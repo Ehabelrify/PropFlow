@@ -79,7 +79,7 @@ async function fetchProfilesByIds(ids: string[]) {
   const { data } = await db.from("profiles")
     .select("id, name, email, initials, avatar_color")
     .in("id", ids);
-  return new Map(data?.map(p => [p.id, p]) || []);
+  return new Map(data?.map((p: any) => [p.id, p]) || []);
 }
 
 export function useCreateLead() {
