@@ -7,11 +7,16 @@ export function useIsMobile() {
 
   React.useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    
+    // Use mql.matches instead of window.innerWidth to prevent unnecessary re-renders.
+    // The media query listener only fires when the match state actually changes,
+    // which is more reliable and prevents cascading re-renders through SidebarProvider.
     const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+      setIsMobile(mql.matches);
     };
+    
     mql.addEventListener("change", onChange);
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    setIsMobile(mql.matches);  // Set initial value using mql.matches
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
