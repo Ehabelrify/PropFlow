@@ -11,6 +11,8 @@ import { useAuth } from "@/lib/auth-context";
 import { useRedeemInvitation } from "@/hooks/use-supabase";
 import { toast } from "sonner";
 
+const db = supabase as any;
+
 const PLANS = [
   { id: "starter", name: "Starter", seats: 5, price: "$0", desc: "Up to 5 agents, basic CRM" },
   { id: "professional", name: "Professional", seats: 25, price: "$49/mo", desc: "Up to 25 agents, advanced features" },
@@ -85,7 +87,7 @@ function SignupPage() {
       return toast.error("Signup failed — please try again");
     }
 
-    const { error: rpcError } = await supabase.rpc("complete_manager_signup", {
+    const { error: rpcError } = await db.rpc("complete_manager_signup", {
       _user_id: authData.user.id,
       _tenant_name: companyName.trim(),
       _tenant_slug: slug || companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40),
