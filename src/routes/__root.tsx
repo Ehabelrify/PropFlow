@@ -1,9 +1,11 @@
-import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute, ScrollRestoration } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
 import { AuthProvider } from "@/lib/auth-context";
 import appCss from "../styles.css?url";
+import { Meta, Scripts } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
 // Create QueryClient as a module-level constant to prevent infinite re-renders
 const queryClient = new QueryClient({
@@ -14,6 +16,22 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function RootShell({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <Meta />
+        <link rel="stylesheet" href={appCss} />
+      </head>
+      <body>
+        {children}
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
+}
 
 export const Route = createRootRoute({
   head: () => ({
@@ -29,6 +47,7 @@ export const Route = createRootRoute({
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
+  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });
