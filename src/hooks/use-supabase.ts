@@ -12,8 +12,8 @@ type PropertyInsert = Tables["properties"]["Insert"];
 type PropertyUpdate = Tables["properties"]["Update"];
 type TaskInsert = Tables["tasks"]["Insert"];
 type TaskUpdate = Tables["tasks"]["Update"];
-type AppointmentInsert = Tables["appointments"]["Insert"];
-type AppointmentUpdate = Tables["appointments"]["Update"];
+type AppointmentInsert = any;
+type AppointmentUpdate = any;
 type ActivityInsert = Tables["activities"]["Insert"];
 type ApprovalInsert = Tables["approval_requests"]["Insert"];
 type ApprovalUpdate = Tables["approval_requests"]["Update"];
@@ -64,8 +64,7 @@ export function useLead(id?: string) {
 // Helper to batch fetch profiles by IDs
 async function fetchProfilesByIds(ids: string[]) {
   if (!ids.length) return new Map();
-  const { data } = await supabase
-    .from("profiles")
+  const { data } = await db.from("profiles")
     .select("id, name, email, initials, avatar_color")
     .in("id", ids);
   return new Map(data?.map(p => [p.id, p]) || []);
@@ -367,8 +366,7 @@ export function useTasks(filters?: {
   return useQuery({
     queryKey: ["tasks", filters],
     queryFn: async () => {
-      let q = supabase
-        .from("tasks")
+      let q = db.from("tasks")
         .select("id, title, status, priority, due_at, lead_id, assigned_to, created_at, tenant_id")
         .order("due_at", { ascending: true });
 
@@ -512,8 +510,7 @@ export function useAppointments(filters?: {
   return useQuery({
     queryKey: ["appointments", filters],
     queryFn: async () => {
-      let q = supabase
-        .from("appointments")
+      let q = db.from("appointments")
         .select("id, title, scheduled_at, status, location, lead_id, assigned_to, property_id, created_at, tenant_id")
         .order("scheduled_at", { ascending: true });
 
@@ -652,8 +649,7 @@ export function useActivities(filters?: { lead_id?: string; tenant_id?: string; 
   return useQuery({
     queryKey: ["activities", filters],
     queryFn: async () => {
-      let q = supabase
-        .from("activities")
+      let q = db.from("activities")
         .select("*")
         .order("created_at", { ascending: false });
       
@@ -667,8 +663,7 @@ export function useActivities(filters?: { lead_id?: string; tenant_id?: string; 
       // Fetch user profiles separately
       if (activities && activities.length > 0) {
         const userIds = [...new Set(activities.map((a: any) => a.user_id))];
-        const { data: profiles } = await supabase
-          .from("profiles")
+        const { data: profiles } = await db.from("profiles")
           .select("id, name, initials, avatar_color")
           .in("id", userIds);
         
@@ -775,8 +770,7 @@ export function useDecideApproval() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status, decision_note }: { id: string; status: "approved" | "rejected"; decision_note?: string }) => {
-      const { data, error } = await supabase
-        .from("approval_requests")
+      const { data, error } = await db.from("approval_requests")
         .update({ status, decided_by: user!.id, decided_at: new Date().toISOString(), decision_note })
         .eq("id", id)
         .select("*")
@@ -819,8 +813,7 @@ export function useTeams(tenantId?: string) {
     queryKey: ["teams", tenantId],
     queryFn: async () => {
       // Fetch teams - RLS policy already filters by tenant_id or super_admin role
-      const { data: teams, error } = await supabase
-        .from("teams")
+      const { data: teams, error } = await db.from("teams")
         .select(`*`)
         .order("name");
       if (error) {
@@ -832,8 +825,7 @@ export function useTeams(tenantId?: string) {
       if (teams && teams.length > 0) {
         const leaderIds = [...new Set(teams.map(t => t.leader_id).filter(Boolean))];
         if (leaderIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from("profiles")
+          const { data: profiles } = await db.from("profiles")
             .select("id, name, initials, avatar_color")
             .in("id", leaderIds);
           
@@ -958,8 +950,7 @@ export function useProfiles(tenant_id?: string) {
     queryKey: ["profiles", tenant_id],
     queryFn: async () => {
       // Build query with explicit field selection
-      let q = supabase
-        .from("profiles")
+      let q = db.from("profiles")
         .select("id, name, email, initials, avatar_color, team_id, tenant_id");
       
       if (tenant_id) q = q.eq("tenant_id", tenant_id);
@@ -970,8 +961,7 @@ export function useProfiles(tenant_id?: string) {
 
       // Fetch roles only for these specific profiles
       const profileIds = profiles.map((p: any) => p.id);
-      const { data: roles } = await supabase
-        .from("user_roles")
+      const { data: roles } = await db.from("user_roles")
         .select("user_id, role")
         .in("user_id", profileIds);
 
