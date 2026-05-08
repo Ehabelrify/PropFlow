@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
 import { AuthProvider } from "@/lib/auth-context";
 import appCss from "../styles.css?url";
-import { Meta, Scripts } from "@tanstack/react-router";
+import { Scripts } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 // Create QueryClient as a module-level constant to prevent infinite re-renders
@@ -21,7 +21,9 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <Meta />
+        <meta charSet="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>PropFlow</title>
         <link rel="stylesheet" href={appCss} />
       </head>
       <body>
