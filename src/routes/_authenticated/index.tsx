@@ -61,15 +61,15 @@ function Dashboard() {
   
   const { data: leads = [] } = useLeads(leadFilters);
   const { data: activities = [] } = useActivities({
-    tenant_id: profile?.tenant_id,
+    tenant_id: profile?.tenant_id ?? undefined,
     limit: 10
   });
   const { data: appointments = [] } = useAppointments({
-    tenant_id: profile?.tenant_id,
+    tenant_id: profile?.tenant_id ?? undefined,
     status: "scheduled"
   });
   const { data: tasks = [] } = useTasks({
-    tenant_id: profile?.tenant_id,
+    tenant_id: profile?.tenant_id ?? undefined,
     status: "open"
   });
 
@@ -148,7 +148,7 @@ function Dashboard() {
   return (
     <div>
       <PageHeader
-        title={`Welcome back, ${user?.name?.split(` `)[0] ?? "User"}`}
+        title={`Welcome back, ${profile?.name?.split(` `)[0] ?? "User"}`}
         description={`${scopeLabel} · ${totalLeads} leads in view`}
         actions={
           <>
