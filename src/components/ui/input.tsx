@@ -4,12 +4,6 @@ import { cn } from "@/lib/utils";
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
   ({ className, type, ...props }, ref) => {
-    const renderRef = React.useRef(0);
-    renderRef.current++;
-    if (renderRef.current > 10) {
-      console.log(`[INPUT:RENDER] WARNING! Input rendered ${renderRef.current} times`, { type });
-    }
-    
     return (
       <input
         type={type}

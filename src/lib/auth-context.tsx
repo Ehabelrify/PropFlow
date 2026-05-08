@@ -49,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ✅ prevents double-init loops (CRITICAL FIX)
   const initialized = useRef(false);
+  const stateUpdateCount = useRef(0);
 
   const loadProfile = async (uid: string, currentSession?: Session | null) => {
     const startTime = performance.now();
@@ -233,16 +234,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile?.tenant_status === "rejected",
   }), [session, profile, roles, loading, hasRole, refresh, signOut]);
 
+  // Track when context value actually changes
+  useEffect(() => {
+    stateUpdateCount.current++;
+    console.log(`[AUTH] Context value changed #${stateUpdateCount.current}`, { 
+      isAuthed: value.isAuthed, 
+      loading: value.loading, 
+      hasProfile: !!value.profile 
+    });
+  }, [value]);
+
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {
   const v = useContext(Ctx);
   if (!v) throw new Error("useAuth must be used within AuthProvider");
-  
-  // Track every access to useAuth hook
-  console.log(`[AUTH:HOOK] useAuth accessed`, { isAuthed: v.isAuthed, loading: v.loading, hasProfile: !!v.profile });
-  
   return v;
 }
 
