@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useCallback, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useCallback, useState, useRef, type ReactNode } from "react";
 import type { User, Lead } from "./types";
 import { useAuth, type AppRole } from "./auth-context";
 import type { Database } from "@/types/database";
@@ -96,6 +96,10 @@ const RoleContext = createContext<RoleContextValue | null>(null);
 export function RoleProvider({ children }: { children: ReactNode }) {
   const { profile, roles: authRoles, isAuthed, session } = useAuth();
   const [userId, setUserId] = useState<string>("");
+
+  const renderCount = useRef(0);
+  renderCount.current++;
+  console.log(`[ROLE] RoleProvider render #${renderCount.current}`, { isAuthed, profileId: profile?.id, rolesCount: authRoles.length });
 
   const authUser = useMemo<User | null>(() => {
     if (!session?.user) return null;

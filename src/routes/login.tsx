@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +32,17 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const renderCount = useRef(0);
+
+  // Track render count
+  renderCount.current++;
+  console.log(`[LOGIN] Render #${renderCount.current}`, { mode, email: email ? `${email.length} chars` : "", password: password ? `${password.length} chars` : "", loading, isAuthed });
 
   useEffect(() => {
-    if (!loading && isAuthed) navigate({ to: (redirect as any) || "/" });
+    if (!loading && isAuthed) {
+      console.log(`[LOGIN] User authenticated, redirecting...`);
+      navigate({ to: (redirect as any) || "/" });
+    }
   }, [isAuthed, loading, redirect, navigate]);
 
   const onSignIn = async (e: React.FormEvent) => {
@@ -159,10 +167,16 @@ function LoginPage() {
 }
 
 function Field({ label, value, onChange, type = "text", hint }: { label: string; value: string; onChange: (v: string) => void; type?: string; hint?: string }) {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    console.log(`[LOGIN] Field "${label}" changed to: ${newValue.length} chars`);
+    onChange(newValue);
+  };
+
   return (
     <div>
       <Label className="text-xs">{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} required className="mt-1" />
+      <Input type={type} value={value} onChange={handleChange} required className="mt-1" />
       {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );

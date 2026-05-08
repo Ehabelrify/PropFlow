@@ -51,11 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initialized = useRef(false);
 
   const loadProfile = async (uid: string, currentSession?: Session | null) => {
+    const startTime = performance.now();
+    console.log(`[AUTH] loadProfile START for uid: ${uid}`, { timestamp: new Date().toISOString() });
+    
     try {
+      console.log(`[AUTH] Fetching profile and roles from Supabase...`);
       const [{ data: p }, { data: r }] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", uid),
       ]);
+      console.log(`[AUTH] Profile/roles fetched successfully`, { profile: p, rolesCount: (r ?? []).length, duration: `${(performance.now() - startTime).toFixed(2)}ms` });
 
       const activeSession = currentSession;
 
@@ -114,19 +119,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialized.current = true;
 
     let mounted = true;
+    let authStateChangeCount = 0;
 
     // 🔥 Auth state listener (NO LOOP VERSION)
     const { data: sub } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
+        authStateChangeCount++;
+        console.log(`[AUTH] onAuthStateChange fired (#${authStateChangeCount}) - event: ${_event}`, { 
+          hasSession: !!newSession, 
+          userId: newSession?.user?.id,
+          timestamp: new Date().toISOString()
+        });
+        
         if (!mounted) return;
 
         setSession(newSession);
+        console.log(`[AUTH] Session state updated`, { isAuthed: !!newSession });
 
         if (newSession?.user?.id) {
           // CRITICAL: defer supabase calls out of the auth callback to avoid
           // deadlocking the GoTrue lock (otherwise signIn/signOut hang forever).
           setTimeout(() => {
-            if (mounted) loadProfile(newSession.user.id, newSession);
+            if (mounted) {
+              console.log(`[AUTH] Triggering loadProfile after timeout`);
+              loadProfile(newSession.user.id, newSession);
+            }
           }, 0);
         } else {
           setProfile(null);
@@ -137,14 +154,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // Initial session load
+    console.log(`[AUTH] Getting initial session...`);
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
 
       setSession(data.session);
+      console.log(`[AUTH] Initial session loaded`, { hasSession: !!data.session });
 
       if (data.session?.user?.id) {
         setTimeout(() => {
-          if (mounted) loadProfile(data.session!.user.id, data.session);
+          if (mounted) {
+            console.log(`[AUTH] Triggering loadProfile from initial session`);
+            loadProfile(data.session!.user.id, data.session);
+          }
         }, 0);
       }
 
