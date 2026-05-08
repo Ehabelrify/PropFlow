@@ -3,6 +3,8 @@ import { useAuth } from "@/lib/auth-context";
 import type { Database } from "@/types/database";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+const db = supabase as any;
+
 type Tables = Database["public"]["Tables"];
 type LeadInsert = Tables["leads"]["Insert"];
 type LeadUpdate = Tables["leads"]["Update"];
@@ -10,8 +12,20 @@ type PropertyInsert = Tables["properties"]["Insert"];
 type PropertyUpdate = Tables["properties"]["Update"];
 type TaskInsert = Tables["tasks"]["Insert"];
 type TaskUpdate = Tables["tasks"]["Update"];
-type AppointmentInsert = Tables["appointments"]["Insert"];
-type AppointmentUpdate = Tables["appointments"]["Update"];
+type AppointmentInsert = {
+  id?: string;
+  title: string;
+  lead_id: string;
+  property_id?: string | null;
+  assigned_to: string;
+  status?: "scheduled" | "completed" | "cancelled" | "no_show";
+  scheduled_at: string;
+  duration_min?: number;
+  location?: string | null;
+  notes?: string | null;
+  tenant_id?: string | null;
+};
+type AppointmentUpdate = Partial<AppointmentInsert>;
 type ActivityInsert = Tables["activities"]["Insert"];
 type ApprovalInsert = Tables["approval_requests"]["Insert"];
 type ApprovalUpdate = Tables["approval_requests"]["Update"];
@@ -30,7 +44,7 @@ export function useLeads(filters?: {
   return useQuery({
     queryKey: ["leads", filters],
     queryFn: async () => {
-      let q = supabase.from("leads").select("*").order("created_at", { ascending: false });
+      let q = db.from("leads").select("*").order("created_at", { ascending: false });
       if (filters?.tenant_id) q = q.eq("tenant_id", filters.tenant_id);
       if (filters?.stage) q = q.eq("stage", filters.stage);
       if (filters?.hot !== undefined) q = q.eq("hot", filters.hot);
@@ -39,7 +53,7 @@ export function useLeads(filters?: {
       if (filters?.limit) q = q.limit(filters.limit);
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!filters?.tenant_id, // Require tenant_id to prevent unfiltered queries
     staleTime: 30_000,
@@ -51,9 +65,9 @@ export function useLead(id?: string) {
     queryKey: ["lead", id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await db.from("leads").select("*").eq("id", id).maybeSingle();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!id,
   });
@@ -62,20 +76,19 @@ export function useLead(id?: string) {
 // Helper to batch fetch profiles by IDs
 async function fetchProfilesByIds(ids: string[]) {
   if (!ids.length) return new Map();
-  const { data } = await supabase
-    .from("profiles")
+  const { data } = await db.from("profiles")
     .select("id, name, email, initials, avatar_color")
     .in("id", ids);
-  return new Map(data?.map(p => [p.id, p]) || []);
+  return new Map(data?.map((p: any) => [p.id, p]) || []);
 }
 
 export function useCreateLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: LeadInsert) => {
-      const { data, error } = await supabase.from("leads").insert(input).select().single();
+      const { data, error } = await db.from("leads").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to only queries matching this tenant
@@ -94,9 +107,9 @@ export function useUpdateLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: LeadUpdate & { id: string }) => {
-      const { data, error } = await supabase.from("leads").update(input).eq("id", id).select().single();
+      const { data, error } = await db.from("leads").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       // Cancel all lead queries for optimistic update
@@ -143,8 +156,8 @@ export function useDeleteLead() {
   return useMutation({
     mutationFn: async (id: string) => {
       // Fetch lead first to get tenant_id for narrow invalidation
-      const { data: lead } = await supabase.from("leads").select("tenant_id").eq("id", id).single();
-      const { error } = await supabase.from("leads").delete().eq("id", id);
+      const { data: lead } = await db.from("leads").select("tenant_id").eq("id", id).single();
+      const { error } = await db.from("leads").delete().eq("id", id);
       if (error) throw error;
       return lead;
     },
@@ -189,7 +202,7 @@ export function useBulkAssignLeads() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ lead_ids, assigned_to }: { lead_ids: string[]; assigned_to: string }) => {
-      const { error } = await supabase.rpc("bulk_assign_leads", {
+      const { error } = await db.rpc("bulk_assign_leads", {
         _lead_ids: lead_ids,
         _assigned_to: assigned_to,
       });
@@ -207,7 +220,7 @@ export function useBulkMoveLeadsStage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ lead_ids, stage }: { lead_ids: string[]; stage: string }) => {
-      const { error } = await supabase.rpc("bulk_move_leads_stage", {
+      const { error } = await db.rpc("bulk_move_leads_stage", {
         _lead_ids: lead_ids,
         _stage: stage,
       });
@@ -232,14 +245,14 @@ export function useProperties(filters?: {
   return useQuery({
     queryKey: ["properties", filters],
     queryFn: async () => {
-      let q = supabase.from("properties").select("*").order("created_at", { ascending: false });
+      let q = db.from("properties").select("*").order("created_at", { ascending: false });
       if (filters?.type) q = q.eq("type", filters.type);
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.tenant_id !== undefined) q = q.eq("tenant_id", filters.tenant_id);
       if (filters?.limit) q = q.limit(filters.limit);
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!filters?.tenant_id,
     staleTime: 60_000,
@@ -250,9 +263,9 @@ export function useCreateProperty() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: PropertyInsert) => {
-      const { data, error } = await supabase.from("properties").insert(input).select().single();
+      const { data, error } = await db.from("properties").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching this tenant
@@ -271,9 +284,9 @@ export function useUpdateProperty() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: PropertyUpdate & { id: string }) => {
-      const { data, error } = await supabase.from("properties").update(input).eq("id", id).select().single();
+      const { data, error } = await db.from("properties").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       await qc.cancelQueries({ queryKey: ["properties"] });
@@ -314,8 +327,8 @@ export function useDeleteProperty() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data: property } = await supabase.from("properties").select("tenant_id").eq("id", id).single();
-      const { error } = await supabase.from("properties").delete().eq("id", id);
+      const { data: property } = await db.from("properties").select("tenant_id").eq("id", id).single();
+      const { error } = await db.from("properties").delete().eq("id", id);
       if (error) throw error;
       return property;
     },
@@ -365,8 +378,7 @@ export function useTasks(filters?: {
   return useQuery({
     queryKey: ["tasks", filters],
     queryFn: async () => {
-      let q = supabase
-        .from("tasks")
+      let q = db.from("tasks")
         .select("id, title, status, priority, due_at, lead_id, assigned_to, created_at, tenant_id")
         .order("due_at", { ascending: true });
 
@@ -377,7 +389,7 @@ export function useTasks(filters?: {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!filters?.tenant_id || !!filters?.lead_id || !!filters?.assigned_to,
     staleTime: 30_000,
@@ -388,9 +400,9 @@ export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: TaskInsert) => {
-      const { data, error } = await supabase.from("tasks").insert(input).select().single();
+      const { data, error } = await db.from("tasks").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching tenant, lead, or assignee
@@ -411,9 +423,9 @@ export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: TaskUpdate & { id: string }) => {
-      const { data, error } = await supabase.from("tasks").update(input).eq("id", id).select().single();
+      const { data, error } = await db.from("tasks").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       await qc.cancelQueries({ queryKey: ["tasks"] });
@@ -456,8 +468,8 @@ export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data: task } = await supabase.from("tasks").select("tenant_id, lead_id, assigned_to").eq("id", id).single();
-      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      const { data: task } = await db.from("tasks").select("tenant_id, lead_id, assigned_to").eq("id", id).single();
+      const { error } = await db.from("tasks").delete().eq("id", id);
       if (error) throw error;
       return task;
     },
@@ -510,8 +522,7 @@ export function useAppointments(filters?: {
   return useQuery({
     queryKey: ["appointments", filters],
     queryFn: async () => {
-      let q = supabase
-        .from("appointments")
+      let q = db.from("appointments")
         .select("id, title, scheduled_at, status, location, lead_id, assigned_to, property_id, created_at, tenant_id")
         .order("scheduled_at", { ascending: true });
 
@@ -523,7 +534,7 @@ export function useAppointments(filters?: {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!filters?.tenant_id || !!filters?.lead_id || !!filters?.assigned_to,
     staleTime: 30_000,
@@ -534,9 +545,9 @@ export function useCreateAppointment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: AppointmentInsert) => {
-      const { data, error } = await supabase.from("appointments").insert(input).select().single();
+      const { data, error } = await db.from("appointments").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching tenant, lead, or assignee
@@ -557,9 +568,9 @@ export function useUpdateAppointment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: AppointmentUpdate & { id: string }) => {
-      const { data, error } = await supabase.from("appointments").update(input).eq("id", id).select().single();
+      const { data, error } = await db.from("appointments").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       await qc.cancelQueries({ queryKey: ["appointments"] });
@@ -602,8 +613,8 @@ export function useDeleteAppointment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data: appointment } = await supabase.from("appointments").select("tenant_id, lead_id, assigned_to").eq("id", id).single();
-      const { error } = await supabase.from("appointments").delete().eq("id", id);
+      const { data: appointment } = await db.from("appointments").select("tenant_id, lead_id, assigned_to").eq("id", id).single();
+      const { error } = await db.from("appointments").delete().eq("id", id);
       if (error) throw error;
       return appointment;
     },
@@ -650,8 +661,7 @@ export function useActivities(filters?: { lead_id?: string; tenant_id?: string; 
   return useQuery({
     queryKey: ["activities", filters],
     queryFn: async () => {
-      let q = supabase
-        .from("activities")
+      let q = db.from("activities")
         .select("*")
         .order("created_at", { ascending: false });
       
@@ -665,8 +675,7 @@ export function useActivities(filters?: { lead_id?: string; tenant_id?: string; 
       // Fetch user profiles separately
       if (activities && activities.length > 0) {
         const userIds = [...new Set(activities.map((a: any) => a.user_id))];
-        const { data: profiles } = await supabase
-          .from("profiles")
+        const { data: profiles } = await db.from("profiles")
           .select("id, name, initials, avatar_color")
           .in("id", userIds);
         
@@ -676,7 +685,7 @@ export function useActivities(filters?: { lead_id?: string; tenant_id?: string; 
         });
       }
       
-      return activities ?? [];
+      return (activities ?? []) as any[];
     },
     enabled: !!(filters?.lead_id || filters?.tenant_id),
     staleTime: 30_000,
@@ -687,9 +696,9 @@ export function useCreateActivity() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: ActivityInsert) => {
-      const { data, error } = await supabase.from("activities").insert(input).select().single();
+      const { data, error } = await db.from("activities").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Only invalidate the specific lead's activities
@@ -707,7 +716,7 @@ export function useApprovals(filters?: { status?: string }) {
   return useQuery({
     queryKey: ["approvals", filters],
     queryFn: async () => {
-      let q = supabase.from("approval_requests").select("*").order("created_at", { ascending: false });
+      let q = db.from("approval_requests").select("*").order("created_at", { ascending: false });
       if (!isSuperAdmin && profile?.tenant_id) q = q.eq("tenant_id", profile.tenant_id);
       if (filters?.status) q = q.eq("status", filters.status);
       const { data: approvals, error } = await q;
@@ -726,8 +735,8 @@ export function useApprovals(filters?: { status?: string }) {
           { data: profiles },
           { data: roles }
         ] = await Promise.all([
-          supabase.from("profiles").select("id, name, email").in("id", userIds),
-          supabase.from("user_roles").select("user_id, role").in("user_id", approvals.map((a: any) => a.requester_id))
+          db.from("profiles").select("id, name, email").in("id", userIds),
+          db.from("user_roles").select("user_id, role").in("user_id", approvals.map((a: any) => a.requester_id))
         ]);
 
         const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
@@ -740,7 +749,7 @@ export function useApprovals(filters?: { status?: string }) {
         });
       }
 
-      return approvals;
+      return (approvals ?? []) as any[];
     },
   });
 }
@@ -750,9 +759,9 @@ export function useCreateApproval() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: Omit<ApprovalInsert, "requester_id">) => {
-      const { data, error } = await supabase.from("approval_requests").insert({ ...input, requester_id: user!.id, tenant_id: profile?.tenant_id }).select().single();
+      const { data, error } = await db.from("approval_requests").insert({ ...input, requester_id: user!.id, tenant_id: profile?.tenant_id }).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching this tenant or status
@@ -773,14 +782,13 @@ export function useDecideApproval() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status, decision_note }: { id: string; status: "approved" | "rejected"; decision_note?: string }) => {
-      const { data, error } = await supabase
-        .from("approval_requests")
+      const { data, error } = await db.from("approval_requests")
         .update({ status, decided_by: user!.id, decided_at: new Date().toISOString(), decision_note })
         .eq("id", id)
         .select("*")
         .single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async ({ id, status }) => {
       await qc.cancelQueries({ queryKey: ["approvals"] });
@@ -817,8 +825,7 @@ export function useTeams(tenantId?: string) {
     queryKey: ["teams", tenantId],
     queryFn: async () => {
       // Fetch teams - RLS policy already filters by tenant_id or super_admin role
-      const { data: teams, error } = await supabase
-        .from("teams")
+      const { data: teams, error } = await db.from("teams")
         .select(`*`)
         .order("name");
       if (error) {
@@ -828,21 +835,20 @@ export function useTeams(tenantId?: string) {
       
       // Fetch leader profiles separately
       if (teams && teams.length > 0) {
-        const leaderIds = [...new Set(teams.map(t => t.leader_id).filter(Boolean))];
+        const leaderIds = [...new Set(teams.map((t: any) => t.leader_id).filter(Boolean))];
         if (leaderIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from("profiles")
+          const { data: profiles } = await db.from("profiles")
             .select("id, name, initials, avatar_color")
             .in("id", leaderIds);
           
-          const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
-          teams.forEach(team => {
+          const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+          teams.forEach((team: any) => {
             (team as any).leader = profileMap.get(team.leader_id) || null;
           });
         }
       }
       
-      return teams;
+      return (teams ?? []) as any[];
     },
   });
 }
@@ -851,9 +857,9 @@ export function useCreateTeam() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: TeamInsert) => {
-      const { data, error } = await supabase.from("teams").insert(input).select().single();
+      const { data, error } = await db.from("teams").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching this tenant
@@ -873,9 +879,9 @@ export function useTenants() {
   return useQuery({
     queryKey: ["tenants"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("tenants").select("*").order("name");
+      const { data, error } = await db.from("tenants").select("*").order("name");
       if (error) throw error;
-      return data;
+      return data as any;
     },
   });
 }
@@ -885,9 +891,9 @@ export function useTenant(id?: string) {
     queryKey: ["tenant", id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase.from("tenants").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await db.from("tenants").select("*").eq("id", id).maybeSingle();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!id,
   });
@@ -897,9 +903,9 @@ export function useUpdateTenant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: { id: string } & Tables["tenants"]["Update"]) => {
-      const { data, error } = await supabase.from("tenants").update(input).eq("id", id).select().single();
+      const { data, error } = await db.from("tenants").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       await qc.cancelQueries({ queryKey: ["tenants"] });
@@ -923,13 +929,13 @@ export function useApproveTenant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, approve }: { id: string; approve: boolean }) => {
-      const { data, error } = await supabase.rpc("approve_tenant_signup", {
+      const { data, error } = await db.rpc("approve_tenant_signup", {
         _tenant_id: id,
         _approver_id: user!.id,
         _approve: approve,
       });
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async ({ id, approve }) => {
       await qc.cancelQueries({ queryKey: ["tenants"] });
@@ -956,8 +962,7 @@ export function useProfiles(tenant_id?: string) {
     queryKey: ["profiles", tenant_id],
     queryFn: async () => {
       // Build query with explicit field selection
-      let q = supabase
-        .from("profiles")
+      let q = db.from("profiles")
         .select("id, name, email, initials, avatar_color, team_id, tenant_id");
       
       if (tenant_id) q = q.eq("tenant_id", tenant_id);
@@ -968,8 +973,7 @@ export function useProfiles(tenant_id?: string) {
 
       // Fetch roles only for these specific profiles
       const profileIds = profiles.map((p: any) => p.id);
-      const { data: roles } = await supabase
-        .from("user_roles")
+      const { data: roles } = await db.from("user_roles")
         .select("user_id, role")
         .in("user_id", profileIds);
 
@@ -977,7 +981,7 @@ export function useProfiles(tenant_id?: string) {
         p.user_roles = roles?.filter((r: any) => r.user_id === p.id) || [];
       });
 
-      return profiles;
+      return profiles as any[];
     },
     enabled: !!tenant_id,
     staleTime: 60_000, // 1 minute - profiles don't change often
@@ -988,9 +992,9 @@ export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: ProfileUpdate & { id: string }) => {
-      const { data, error } = await supabase.from("profiles").update(input).eq("id", id).select().single();
+      const { data, error } = await db.from("profiles").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching this tenant
@@ -1037,19 +1041,19 @@ export function useDashboardStats() {
     queryKey: ["dashboard-stats", profile?.tenant_id],
     queryFn: async () => {
       const tenantId = profile?.tenant_id;
-      const q = (tenantId ? supabase.from("leads") : supabase.from("leads"));
+      const q = (tenantId ? db.from("leads") : db.from("leads"));
       const [leadsRes, wonRes, tasksRes, apptsRes, pipelineRes] = await Promise.all([
-        supabase.from("leads").select("id, budget", { count: "exact" }).eq("tenant_id", tenantId || ""),
-        supabase.from("leads").select("budget").eq("stage", "won").eq("tenant_id", tenantId || ""),
-        supabase.from("tasks").select("id", { count: "exact" }).eq("status", "open"),
-        supabase.from("appointments").select("id", { count: "exact" }).eq("status", "scheduled"),
-        supabase.from("leads").select("stage").eq("tenant_id", tenantId || ""),
+        db.from("leads").select("id, budget", { count: "exact" }).eq("tenant_id", tenantId || ""),
+        db.from("leads").select("budget").eq("stage", "won").eq("tenant_id", tenantId || ""),
+        db.from("tasks").select("id", { count: "exact" }).eq("status", "open"),
+        db.from("appointments").select("id", { count: "exact" }).eq("status", "scheduled"),
+        db.from("leads").select("stage").eq("tenant_id", tenantId || ""),
       ]);
       if (leadsRes.error) throw leadsRes.error;
       return {
         totalLeads: leadsRes.count ?? 0,
-        pipelineValue: (leadsRes.data ?? []).reduce((sum, l) => sum + Number(l.budget ?? 0), 0),
-        wonRevenue: (wonRes.data ?? []).reduce((sum, l) => sum + Number(l.budget ?? 0), 0),
+        pipelineValue: (leadsRes.data ?? []).reduce((sum: number, l: any) => sum + Number(l.budget ?? 0), 0),
+        wonRevenue: (wonRes.data ?? []).reduce((sum: number, l: any) => sum + Number(l.budget ?? 0), 0),
         openTasks: tasksRes.count ?? 0,
         upcomingAppts: apptsRes.count ?? 0,
         byStage: ((pipelineRes.data ?? []) as { stage: string }[]).reduce(
@@ -1066,11 +1070,11 @@ export function useInvitations(tenantId?: string) {
   return useQuery({
     queryKey: ["invitations", tenantId],
     queryFn: async () => {
-      let q = supabase.from("invitations").select("*").order("created_at", { ascending: false });
+      let q = db.from("invitations").select("*").order("created_at", { ascending: false });
       if (tenantId) q = q.eq("tenant_id", tenantId);
       const { data, error } = await q;
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!tenantId,
   });
@@ -1083,7 +1087,7 @@ export function useCreateInvitation() {
     mutationFn: async ({ tenant_id, team_id, expires_in_hours = 168 }: { tenant_id: string; team_id?: string | null; expires_in_hours?: number }) => {
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
       const expires_at = new Date(Date.now() + expires_in_hours * 3600000).toISOString();
-      const { data, error } = await supabase.from("invitations").insert({
+      const { data, error } = await db.from("invitations").insert({
         tenant_id,
         team_id: team_id || null,
         code,
@@ -1092,7 +1096,7 @@ export function useCreateInvitation() {
         created_by: user!.id,
       }).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Only invalidate queries for this specific tenant
@@ -1105,7 +1109,7 @@ export function useRevokeInvitation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, tenant_id }: { id: string; tenant_id: string }) => {
-      const { error } = await supabase.from("invitations").update({ is_active: false }).eq("id", id);
+      const { error } = await db.from("invitations").update({ is_active: false }).eq("id", id);
       if (error) throw error;
       return tenant_id;
     },
@@ -1134,12 +1138,12 @@ export function useRedeemInvitation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ code, userId }: { code: string; userId: string }) => {
-      const { data, error } = await supabase.rpc("redeem_invitation", {
+      const { data, error } = await db.rpc("redeem_invitation", {
         _code: code,
         _user_id: userId,
       });
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Invalidate profiles and teams - these are already tenant-scoped in queries
@@ -1166,12 +1170,12 @@ export function usePlatformHealth() {
         recentApptsRes,
         totalLeadsRes,
       ] = await Promise.all([
-        supabase.from("tenants").select("id, status, created_at", { count: "exact" }),
-        supabase.from("tenants").select("id", { count: "exact" }).eq("status", "active"),
-        supabase.from("leads").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
-        supabase.from("tasks").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
-        supabase.from("appointments").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
-        supabase.from("leads").select("id", { count: "exact" }),
+        db.from("tenants").select("id, status, created_at", { count: "exact" }),
+        db.from("tenants").select("id", { count: "exact" }).eq("status", "active"),
+        db.from("leads").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
+        db.from("tasks").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
+        db.from("appointments").select("id", { count: "exact" }).gte("created_at", thirtyDaysAgo),
+        db.from("leads").select("id", { count: "exact" }),
       ]);
 
       if (tenantsRes.error) throw tenantsRes.error;
@@ -1207,8 +1211,8 @@ export function useUpdateUserRole() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: "agent" | "leader" | "manager" }) => {
-      await supabase.from("user_roles").delete().eq("user_id", userId);
-      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
+      await db.from("user_roles").delete().eq("user_id", userId);
+      const { error } = await db.from("user_roles").insert({ user_id: userId, role });
       if (error) throw error;
       return { userId, role };
     },
@@ -1227,7 +1231,7 @@ export function useAssignTeam() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ userId, teamId }: { userId: string; teamId: string | null }) => {
-      const { error } = await supabase.from("profiles").update({ team_id: teamId }).eq("id", userId);
+      const { error } = await db.from("profiles").update({ team_id: teamId }).eq("id", userId);
       if (error) throw error;
       return { userId, teamId };
     },

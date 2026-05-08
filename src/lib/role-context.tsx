@@ -13,6 +13,11 @@ export function orgRoleOf(u: User | null | undefined): "super_admin" | "manager"
 
 type DbLead = Database["public"]["Tables"]["leads"]["Row"];
 
+function normalizeRequirements(value: DbLead["requirements"]): Lead["requirements"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Lead["requirements"];
+}
+
 export type OrgRole = "super_admin" | "manager" | "leader" | "agent";
 
 export type Permission =
@@ -79,7 +84,7 @@ function dbLeadToMockLead(db: DbLead): Lead {
     propertyInterest: db.property_interest ?? undefined,
     tags: db.tags ?? [],
     notes: db.notes ?? "",
-    requirements: db.requirements ?? {},
+    requirements: normalizeRequirements(db.requirements),
     createdAt: db.created_at,
     updatedAt: db.updated_at,
     lastActivityAt: db.last_activity_at,

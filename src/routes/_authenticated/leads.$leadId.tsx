@@ -135,6 +135,7 @@ function LeadDetail() {
 
   const submitNote = () => {
     if (!noteText.trim()) return;
+    if (!user?.id) return toast.error("Sign in required");
     createActivity.mutate({
       lead_id: leadId,
       type: "note",
@@ -163,7 +164,7 @@ function LeadDetail() {
 
   const toggleLeadTag = (tag: string) => {
     const nextTags = (lead.tags ?? []).includes(tag)
-      ? (lead.tags ?? []).filter(t => t !== tag)
+      ? (lead.tags ?? []).filter((t: string) => t !== tag)
       : [...(lead.tags ?? []), tag];
     updateLead.mutate({ id: leadId, tags: nextTags });
   };
@@ -187,7 +188,7 @@ function LeadDetail() {
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-brand text-lg font-semibold text-primary-foreground shadow-sm">
-                {lead.name.split(" ").map(n => n[0]).join("").slice(0,2)}
+                {lead.name.split(" ").map((n: string) => n[0]).join("").slice(0,2)}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -385,7 +386,7 @@ function LeadDetail() {
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {(lead.tags ?? []).length === 0 && <span className="text-xs text-muted-foreground">No tags</span>}
-                {(lead.tags ?? []).map(t => (
+                {(lead.tags ?? []).map((t: string) => (
                   <span key={t} className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground">
                     {t}
                   </span>

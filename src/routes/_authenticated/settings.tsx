@@ -21,7 +21,7 @@ function SettingsPage() {
   const { profile, user: authUser, refresh } = useAuth();
   const { orgRole } = useRole();
   const updateProfile = useUpdateProfile();
-  const { data: tenant } = useTenant(profile?.tenant_id);
+  const { data: tenant } = useTenant(profile?.tenant_id ?? undefined);
   const updateTenant = useUpdateTenant();
 
   const [editName, setEditName] = useState(profile?.name ?? "");

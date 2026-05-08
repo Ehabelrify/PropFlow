@@ -9,6 +9,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
+const db = supabase as any;
+
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
     // Guard runs server-side too; redirect handled in component
@@ -25,7 +27,7 @@ function AuthLayout() {
 
   useEffect(() => {
     if (!loading && !isAuthed) {
-      const redirect = path + (Object.keys(search as Record<string, unknown>).length
+      const redirect = path + (Object.keys(search as unknown as Record<string, unknown>).length
         ? `?${new URLSearchParams(search as any).toString()}`
         : "");
       navigate({ to: "/login", search: { redirect } });
@@ -35,8 +37,9 @@ function AuthLayout() {
   // Check if tenant was just approved (polling)
   useEffect(() => {
     if (!tenantPending || !profile?.tenant_id) return;
+    const tenantId = profile.tenant_id;
     const interval = setInterval(async () => {
-      const { data } = await supabase.from("tenants").select("status").eq("id", profile.tenant_id).maybeSingle();
+      const { data } = await db.from("tenants").select("status").eq("id", tenantId).maybeSingle();
       if (data?.status === "active") {
         await refresh(); // Refresh auth/profile state
         navigate({ to: "/" }); // Navigate in-app to dashboard without reload

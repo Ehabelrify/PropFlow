@@ -9,6 +9,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
+const db = supabase as any;
+
 export type AppRole = "super_admin" | "manager" | "leader" | "agent";
 
 export interface Profile {
@@ -80,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let tenantStatus: string | null = null;
 
       if ((p as Profile)?.tenant_id) {
-        const { data: t } = await supabase
+        const { data: t } = await db
           .from("tenants")
           .select("status")
           .eq("id", (p as Profile).tenant_id!)
