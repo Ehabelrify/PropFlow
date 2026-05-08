@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useCallback, useState, type ReactNode } from "react";
 import type { User, Lead } from "./types";
 import { useAuth, type AppRole } from "./auth-context";
 import type { Database } from "@/types/database";
@@ -116,12 +116,19 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
   const user = authUser;
 
-  let orgRole: OrgRole = "agent";
-  if (user) {
-    orgRole = authRoles.includes("super_admin") ? "super_admin" :
-             authRoles.includes("manager") ? "manager" :
-             authRoles.includes("leader") ? "leader" : "agent";
-  }
+  // Memoize orgRole calculation to prevent re-renders (CPU freeze fix)
+  const orgRole: OrgRole = useMemo(() => {
+    if (!user) return "agent";
+    return authRoles.includes("super_admin") ? "super_admin" :
+           authRoles.includes("manager") ? "manager" :
+           authRoles.includes("leader") ? "leader" : "agent";
+  }, [user, authRoles]);
+
+  // Memoize perms Set to prevent recreation on every render (CPU freeze fix)
+  const perms = useMemo(() => new Set(ROLE_PERMS[orgRole]), [orgRole]);
+
+  // Memoize has function to prevent recreation on every render (CPU freeze fix)
+  const has = useCallback((p: Permission) => perms.has(p), [perms]);
 
   const value = useMemo<RoleContextValue>(() => {
     if (!user) {
@@ -134,9 +141,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         scopeLabel: "",
       };
     }
-
-    const perms = new Set(ROLE_PERMS[orgRole]);
-    const has = (p: Permission) => perms.has(p);
 
     // scopedLeads now empty - data fetching moved to route-level
     const scopedLeads: Lead[] = [];
@@ -154,7 +158,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }
 
     return { user, orgRole, setUserId, has, scopedLeads, scopeLabel };
-  }, [user, orgRole]);
+  }, [user, orgRole, setUserId, has]);
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 }

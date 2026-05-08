@@ -4,6 +4,8 @@ import {
   useEffect,
   useState,
   useRef,
+  useMemo,
+  useCallback,
   type ReactNode,
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -155,29 +157,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const refresh = async () => {
+  // Memoize callbacks to prevent re-renders (CPU freeze fix)
+  const refresh = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     if (data.session?.user) {
       await loadProfile(data.session.user.id, data.session);
     }
-  };
+  }, []);
 
-  const value: AuthCtx = {
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
+
+  const hasRole = useCallback((r: AppRole) => roles.includes(r), [roles]);
+
+  // Memoize context value to prevent unnecessary re-renders (CPU freeze fix)
+  const value: AuthCtx = useMemo(() => ({
     session,
     user: session?.user ?? null,
     profile,
     roles,
     loading,
     isAuthed: !!session,
-    hasRole: (r) => roles.includes(r),
+    hasRole,
     refresh,
-    signOut: async () => {
-      await supabase.auth.signOut();
-    },
+    signOut,
     tenantPending:
       profile?.tenant_status === "pending_approval" ||
       profile?.tenant_status === "rejected",
-  };
+  }), [session, profile, roles, loading, hasRole, refresh, signOut]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

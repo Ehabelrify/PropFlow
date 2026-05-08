@@ -5,8 +5,9 @@ import { getRouter } from "./router";
 
 const router = getRouter();
 
+// StrictMode disabled to prevent double-rendering that causes CPU freeze
+// when clicking email input fields. The double-rendering amplifies re-render
+// cascades from unmemoized context values, causing 97% CPU usage.
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <RouterProvider router={router} />
-  </React.StrictMode>
+  <RouterProvider router={router} />
 );
