@@ -29,9 +29,10 @@ export function NewLeadDialog({ trigger, defaultStage }: { trigger: ReactNode; d
   const [budget, setBudget] = useState("5000000");
   const [source, setSource] = useState<LeadSource>("manual");
   const [stage, setStage] = useState<LeadStage>(defaultStage ?? "new");
-  const [assignedTo, setAssignedTo] = useState(user.id);
+  const [assignedTo, setAssignedTo] = useState(user?.id ?? "");
 
   const submit = () => {
+    if (!user?.id) return toast.error("Sign in required");
     if (!name.trim()) return toast.error("Name is required");
     createLead.mutate({
       name,
@@ -127,6 +128,7 @@ export function LogActivityDialog({ trigger, leadId, type, title }: {
   const [desc, setDesc] = useState("");
 
   const submit = () => {
+    if (!user?.id) return toast.error("Sign in required");
     createActivity.mutate({
       lead_id: leadId,
       type,
@@ -250,6 +252,7 @@ export function ScheduleVisitDialog({ trigger, leadId }: { trigger: ReactNode; l
   const [location, setLocation] = useState("");
 
   const submit = () => {
+    if (!user?.id) return toast.error("Sign in required");
     if (!chosenLead) return toast.error("Pick a lead");
     const lead = (scopedLeads || []).find(l => l.id === chosenLead);
     const prop = (properties || []).find((p) => p.id === propertyId);
