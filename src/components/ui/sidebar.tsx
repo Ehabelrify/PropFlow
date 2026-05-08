@@ -93,18 +93,32 @@ const SidebarProvider = React.forwardRef<
       return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
     }, [isMobile, setOpen, setOpenMobile]);
 
+    // Store the latest toggleSidebar in a ref so the keyboard listener effect
+    // does not depend on a callback that is recreated when isMobile changes.
+    // This prevents the event listener from being re-registered on every render
+    // and avoids the infinite re-render loop in SidebarProvider.
+    const toggleSidebarRef = React.useRef(toggleSidebar);
+
+    // Keep the ref pointed at the latest toggleSidebar implementation so the
+    // keyboard shortcut always uses the current mobile/desktop toggle behavior.
+    React.useEffect(() => {
+      toggleSidebarRef.current = toggleSidebar;
+    }, [toggleSidebar]);
+
     // Adds a keyboard shortcut to toggle the sidebar.
+    // This effect runs only once; the handler reads the latest toggleSidebar
+    // from the ref, which prevents the listener dependency loop.
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
         if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
           event.preventDefault();
-          toggleSidebar();
+          toggleSidebarRef.current();
         }
       };
 
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [toggleSidebar]);
+    }, []);
 
     // We add a state so that we can do data-state="expanded" or "collapsed".
     // This makes it easier to style the sidebar with Tailwind classes.
