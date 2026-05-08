@@ -23,7 +23,12 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PropFlow</title>
+        <title>PropFlow CRM — Real Estate Sales Platform</title>
+        <meta name="description" content="Multi-tenant CRM for real estate brokers, developers, and resellers. Capture leads, manage pipelines, schedule visits, and close deals faster." />
+        <meta property="og:title" content="PropFlow CRM" />
+        <meta property="og:description" content="Real estate CRM for brokers, developers and resellers." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary" />
         <link rel="stylesheet" href={appCss} />
       </head>
       <body>
@@ -36,19 +41,6 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "PropFlow CRM — Real Estate Sales Platform" },
-      { name: "description", content: "Multi-tenant CRM for real estate brokers, developers, and resellers. Capture leads, manage pipelines, schedule visits, and close deals faster." },
-      { property: "og:title", content: "PropFlow CRM" },
-      { property: "og:description", content: "Real estate CRM for brokers, developers and resellers." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-    links: [{ rel: "stylesheet", href: appCss }],
-  }),
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
