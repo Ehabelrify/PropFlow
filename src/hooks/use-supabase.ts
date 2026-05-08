@@ -12,8 +12,20 @@ type PropertyInsert = Tables["properties"]["Insert"];
 type PropertyUpdate = Tables["properties"]["Update"];
 type TaskInsert = Tables["tasks"]["Insert"];
 type TaskUpdate = Tables["tasks"]["Update"];
-type AppointmentInsert = any;
-type AppointmentUpdate = any;
+type AppointmentInsert = {
+  id?: string;
+  title: string;
+  lead_id: string;
+  property_id?: string | null;
+  assigned_to: string;
+  status?: "scheduled" | "completed" | "cancelled" | "no_show";
+  scheduled_at: string;
+  duration_min?: number;
+  location?: string | null;
+  notes?: string | null;
+  tenant_id?: string | null;
+};
+type AppointmentUpdate = Partial<AppointmentInsert>;
 type ActivityInsert = Tables["activities"]["Insert"];
 type ApprovalInsert = Tables["approval_requests"]["Insert"];
 type ApprovalUpdate = Tables["approval_requests"]["Update"];
@@ -41,7 +53,7 @@ export function useLeads(filters?: {
       if (filters?.limit) q = q.limit(filters.limit);
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!filters?.tenant_id, // Require tenant_id to prevent unfiltered queries
     staleTime: 30_000,
@@ -55,7 +67,7 @@ export function useLead(id?: string) {
       if (!id) return null;
       const { data, error } = await db.from("leads").select("*").eq("id", id).maybeSingle();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!id,
   });
@@ -76,7 +88,7 @@ export function useCreateLead() {
     mutationFn: async (input: LeadInsert) => {
       const { data, error } = await db.from("leads").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to only queries matching this tenant
@@ -97,7 +109,7 @@ export function useUpdateLead() {
     mutationFn: async ({ id, ...input }: LeadUpdate & { id: string }) => {
       const { data, error } = await db.from("leads").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       // Cancel all lead queries for optimistic update
@@ -240,7 +252,7 @@ export function useProperties(filters?: {
       if (filters?.limit) q = q.limit(filters.limit);
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!filters?.tenant_id,
     staleTime: 60_000,
@@ -253,7 +265,7 @@ export function useCreateProperty() {
     mutationFn: async (input: PropertyInsert) => {
       const { data, error } = await db.from("properties").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching this tenant
@@ -274,7 +286,7 @@ export function useUpdateProperty() {
     mutationFn: async ({ id, ...input }: PropertyUpdate & { id: string }) => {
       const { data, error } = await db.from("properties").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       await qc.cancelQueries({ queryKey: ["properties"] });
@@ -377,7 +389,7 @@ export function useTasks(filters?: {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!filters?.tenant_id || !!filters?.lead_id || !!filters?.assigned_to,
     staleTime: 30_000,
@@ -390,7 +402,7 @@ export function useCreateTask() {
     mutationFn: async (input: TaskInsert) => {
       const { data, error } = await db.from("tasks").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching tenant, lead, or assignee
@@ -413,7 +425,7 @@ export function useUpdateTask() {
     mutationFn: async ({ id, ...input }: TaskUpdate & { id: string }) => {
       const { data, error } = await db.from("tasks").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       await qc.cancelQueries({ queryKey: ["tasks"] });
@@ -522,7 +534,7 @@ export function useAppointments(filters?: {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!filters?.tenant_id || !!filters?.lead_id || !!filters?.assigned_to,
     staleTime: 30_000,
@@ -535,7 +547,7 @@ export function useCreateAppointment() {
     mutationFn: async (input: AppointmentInsert) => {
       const { data, error } = await db.from("appointments").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching tenant, lead, or assignee
@@ -558,7 +570,7 @@ export function useUpdateAppointment() {
     mutationFn: async ({ id, ...input }: AppointmentUpdate & { id: string }) => {
       const { data, error } = await db.from("appointments").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       await qc.cancelQueries({ queryKey: ["appointments"] });
@@ -673,7 +685,7 @@ export function useActivities(filters?: { lead_id?: string; tenant_id?: string; 
         });
       }
       
-      return activities ?? [];
+      return (activities ?? []) as any[];
     },
     enabled: !!(filters?.lead_id || filters?.tenant_id),
     staleTime: 30_000,
@@ -686,7 +698,7 @@ export function useCreateActivity() {
     mutationFn: async (input: ActivityInsert) => {
       const { data, error } = await db.from("activities").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Only invalidate the specific lead's activities
@@ -737,7 +749,7 @@ export function useApprovals(filters?: { status?: string }) {
         });
       }
 
-      return approvals;
+      return (approvals ?? []) as any[];
     },
   });
 }
@@ -749,7 +761,7 @@ export function useCreateApproval() {
     mutationFn: async (input: Omit<ApprovalInsert, "requester_id">) => {
       const { data, error } = await db.from("approval_requests").insert({ ...input, requester_id: user!.id, tenant_id: profile?.tenant_id }).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching this tenant or status
@@ -776,7 +788,7 @@ export function useDecideApproval() {
         .select("*")
         .single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async ({ id, status }) => {
       await qc.cancelQueries({ queryKey: ["approvals"] });
@@ -823,20 +835,20 @@ export function useTeams(tenantId?: string) {
       
       // Fetch leader profiles separately
       if (teams && teams.length > 0) {
-        const leaderIds = [...new Set(teams.map(t => t.leader_id).filter(Boolean))];
+        const leaderIds = [...new Set(teams.map((t: any) => t.leader_id).filter(Boolean))];
         if (leaderIds.length > 0) {
           const { data: profiles } = await db.from("profiles")
             .select("id, name, initials, avatar_color")
             .in("id", leaderIds);
           
-          const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
-          teams.forEach(team => {
+          const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+          teams.forEach((team: any) => {
             (team as any).leader = profileMap.get(team.leader_id) || null;
           });
         }
       }
       
-      return teams;
+      return (teams ?? []) as any[];
     },
   });
 }
@@ -847,7 +859,7 @@ export function useCreateTeam() {
     mutationFn: async (input: TeamInsert) => {
       const { data, error } = await db.from("teams").insert(input).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching this tenant
@@ -869,7 +881,7 @@ export function useTenants() {
     queryFn: async () => {
       const { data, error } = await db.from("tenants").select("*").order("name");
       if (error) throw error;
-      return data;
+      return data as any;
     },
   });
 }
@@ -881,7 +893,7 @@ export function useTenant(id?: string) {
       if (!id) return null;
       const { data, error } = await db.from("tenants").select("*").eq("id", id).maybeSingle();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!id,
   });
@@ -893,7 +905,7 @@ export function useUpdateTenant() {
     mutationFn: async ({ id, ...input }: { id: string } & Tables["tenants"]["Update"]) => {
       const { data, error } = await db.from("tenants").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async vars => {
       await qc.cancelQueries({ queryKey: ["tenants"] });
@@ -923,7 +935,7 @@ export function useApproveTenant() {
         _approve: approve,
       });
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onMutate: async ({ id, approve }) => {
       await qc.cancelQueries({ queryKey: ["tenants"] });
@@ -969,7 +981,7 @@ export function useProfiles(tenant_id?: string) {
         p.user_roles = roles?.filter((r: any) => r.user_id === p.id) || [];
       });
 
-      return profiles;
+      return profiles as any[];
     },
     enabled: !!tenant_id,
     staleTime: 60_000, // 1 minute - profiles don't change often
@@ -982,7 +994,7 @@ export function useUpdateProfile() {
     mutationFn: async ({ id, ...input }: ProfileUpdate & { id: string }) => {
       const { data, error } = await db.from("profiles").update(input).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Narrow invalidation to queries matching this tenant
@@ -1040,8 +1052,8 @@ export function useDashboardStats() {
       if (leadsRes.error) throw leadsRes.error;
       return {
         totalLeads: leadsRes.count ?? 0,
-        pipelineValue: (leadsRes.data ?? []).reduce((sum, l) => sum + Number(l.budget ?? 0), 0),
-        wonRevenue: (wonRes.data ?? []).reduce((sum, l) => sum + Number(l.budget ?? 0), 0),
+        pipelineValue: (leadsRes.data ?? []).reduce((sum: number, l: any) => sum + Number(l.budget ?? 0), 0),
+        wonRevenue: (wonRes.data ?? []).reduce((sum: number, l: any) => sum + Number(l.budget ?? 0), 0),
         openTasks: tasksRes.count ?? 0,
         upcomingAppts: apptsRes.count ?? 0,
         byStage: ((pipelineRes.data ?? []) as { stage: string }[]).reduce(
@@ -1062,7 +1074,7 @@ export function useInvitations(tenantId?: string) {
       if (tenantId) q = q.eq("tenant_id", tenantId);
       const { data, error } = await q;
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!tenantId,
   });
@@ -1084,7 +1096,7 @@ export function useCreateInvitation() {
         created_by: user!.id,
       }).select().single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Only invalidate queries for this specific tenant
@@ -1131,7 +1143,7 @@ export function useRedeemInvitation() {
         _user_id: userId,
       });
       if (error) throw error;
-      return data;
+      return data as any;
     },
     onSuccess: (data) => {
       // Invalidate profiles and teams - these are already tenant-scoped in queries
