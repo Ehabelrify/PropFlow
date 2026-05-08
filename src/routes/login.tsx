@@ -167,10 +167,20 @@ function LoginPage() {
 }
 
 function Field({ label, value, onChange, type = "text", hint }: { label: string; value: string; onChange: (v: string) => void; type?: string; hint?: string }) {
+  const handleFocus = () => {
+    console.log(`[INPUT] Focus on "${label}" field`, { currentValue: value });
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    console.log(`[INPUT] "${label}" changed`, { length: newValue.length });
+    onChange(newValue);
+  };
+
   return (
     <div>
       <Label className="text-xs">{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} required className="mt-1" />
+      <Input type={type} value={value} onChange={handleChange} onFocus={handleFocus} required className="mt-1" />
       {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );

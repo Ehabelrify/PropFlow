@@ -102,6 +102,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   console.log(`[ROLE] RoleProvider render #${renderCount.current}`, { isAuthed, profileId: profile?.id, rolesCount: authRoles.length });
 
   const authUser = useMemo<User | null>(() => {
+    console.log(`[ROLE:MEMO] authUser memo recalculating`, { hasSession: !!session?.user, hasProfile: !!profile });
     if (!session?.user) return null;
     const primaryRole = authRoles.includes("super_admin") ? "super_admin" :
                       authRoles.includes("manager") ? "manager" :
