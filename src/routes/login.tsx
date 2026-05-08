@@ -167,16 +167,10 @@ function LoginPage() {
 }
 
 function Field({ label, value, onChange, type = "text", hint }: { label: string; value: string; onChange: (v: string) => void; type?: string; hint?: string }) {
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    console.log(`[LOGIN] Field "${label}" changed to: ${newValue.length} chars`);
-    onChange(newValue);
-  };
-
   return (
     <div>
       <Label className="text-xs">{label}</Label>
-      <Input type={type} value={value} onChange={handleChange} required className="mt-1" />
+      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} required className="mt-1" />
       {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );

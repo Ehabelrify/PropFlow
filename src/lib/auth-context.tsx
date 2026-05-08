@@ -64,6 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const activeSession = currentSession;
 
+      // Prepare all data first, then batch state updates
+      let profileToSet: Profile | null = null;
+      let rolesToSet: AppRole[] = [];
+
       // create profile if missing
       if (!p && activeSession?.user) {
         const { data: newProfile } = await supabase
@@ -78,39 +82,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .select()
           .single();
 
-        setProfile(
-          newProfile ? { ...newProfile, tenant_status: null } : null
-        );
+        profileToSet = newProfile ? { ...newProfile, tenant_status: null } : null;
+        rolesToSet = ((r ?? []) as { role: AppRole }[]).map((x) => x.role);
+      } else {
+        let tenantStatus: string | null = null;
 
-        setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
-        return;
+        if ((p as Profile)?.tenant_id) {
+          const { data: t } = await db
+            .from("tenants")
+            .select("status")
+            .eq("id", (p as Profile).tenant_id!)
+            .maybeSingle();
+
+          tenantStatus = t?.status ?? null;
+        }
+
+        const profileData = p as Profile;
+        profileToSet = profileData ? { ...profileData, tenant_status: tenantStatus } : null;
+        rolesToSet = ((r ?? []) as { role: AppRole }[]).map((x) => x.role);
       }
 
-      let tenantStatus: string | null = null;
-
-      if ((p as Profile)?.tenant_id) {
-        const { data: t } = await db
-          .from("tenants")
-          .select("status")
-          .eq("id", (p as Profile).tenant_id!)
-          .maybeSingle();
-
-        tenantStatus = t?.status ?? null;
-      }
-
-      const profileData = p as Profile;
-
-      setProfile(
-        profileData
-          ? { ...profileData, tenant_status: tenantStatus }
-          : null
-      );
-
-      setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
+      // Batch state updates in a single microtask to prevent React error #185
+      console.log(`[AUTH] Batching state updates...`);
+      Promise.resolve().then(() => {
+        setProfile(profileToSet);
+        setRoles(rolesToSet);
+        console.log(`[AUTH] loadProfile COMPLETE`, { duration: `${(performance.now() - startTime).toFixed(2)}ms` });
+      });
     } catch (error) {
       console.error("Error loading profile:", error);
-      setProfile(null);
-      setRoles([]);
+      Promise.resolve().then(() => {
+        setProfile(null);
+        setRoles([]);
+      });
     }
   };
 
@@ -120,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let mounted = true;
     let authStateChangeCount = 0;
+    let initialLoadDone = false;
 
     // 🔥 Auth state listener (NO LOOP VERSION)
     const { data: sub } = supabase.auth.onAuthStateChange(
@@ -133,44 +138,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (!mounted) return;
 
-        setSession(newSession);
-        console.log(`[AUTH] Session state updated`, { isAuthed: !!newSession });
+        // Defer state updates to next microtask to prevent React error #185
+        // when router is rendering during auth state changes
+        Promise.resolve().then(() => {
+          if (!mounted) return;
+          
+          setSession(newSession);
+          console.log(`[AUTH] Session state updated`, { isAuthed: !!newSession });
 
-        if (newSession?.user?.id) {
-          // CRITICAL: defer supabase calls out of the auth callback to avoid
-          // deadlocking the GoTrue lock (otherwise signIn/signOut hang forever).
-          setTimeout(() => {
-            if (mounted) {
-              console.log(`[AUTH] Triggering loadProfile after timeout`);
-              loadProfile(newSession.user.id, newSession);
+          if (newSession?.user?.id) {
+            // CRITICAL: defer supabase calls out of the auth callback to avoid
+            // deadlocking the GoTrue lock (otherwise signIn/signOut hang forever).
+            setTimeout(() => {
+              if (mounted) {
+                console.log(`[AUTH] Triggering loadProfile after timeout`);
+                loadProfile(newSession.user.id, newSession);
+              }
+            }, 0);
+          } else {
+            // Batch clear state updates
+            setProfile(null);
+            setRoles([]);
+            if (!initialLoadDone) {
+              setLoading(false);
+              initialLoadDone = true;
             }
-          }, 0);
-        } else {
-          setProfile(null);
-          setRoles([]);
-          setLoading(false);
-        }
+          }
+        });
       }
     );
 
-    // Initial session load
+    // Initial session load - also defer to prevent render conflicts
     console.log(`[AUTH] Getting initial session...`);
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
 
-      setSession(data.session);
-      console.log(`[AUTH] Initial session loaded`, { hasSession: !!data.session });
+      Promise.resolve().then(() => {
+        if (!mounted) return;
 
-      if (data.session?.user?.id) {
-        setTimeout(() => {
-          if (mounted) {
-            console.log(`[AUTH] Triggering loadProfile from initial session`);
-            loadProfile(data.session!.user.id, data.session);
+        setSession(data.session);
+        console.log(`[AUTH] Initial session loaded`, { hasSession: !!data.session });
+
+        if (data.session?.user?.id) {
+          setTimeout(() => {
+            if (mounted) {
+              console.log(`[AUTH] Triggering loadProfile from initial session`);
+              loadProfile(data.session!.user.id, data.session);
+            }
+          }, 0);
+        } else {
+          // Only set loading false here if we haven't already done so via auth state change
+          if (!initialLoadDone) {
+            console.log(`[AUTH] Initial load complete - no session found`);
+            setLoading(false);
+            initialLoadDone = true;
           }
-        }, 0);
-      }
-
-      setLoading(false);
+        }
+      });
     });
 
     return () => {
