@@ -22,7 +22,7 @@ function PipelinePage() {
   const moveLead = (leadId: string, newStage: string) => {
     if (!leadId) return;
     const stageLabel = PIPELINE_STAGES.find(s => s.id === newStage)?.label ?? newStage;
-    updateLead.mutate({ id: leadId, stage: newStage }, {
+    updateLead.mutate({ id: leadId, stage: newStage as any }, {
       onSuccess: () => toast.success(`Moved to ${stageLabel}`),
       onError: () => toast.error("Failed to update lead"),
     });
