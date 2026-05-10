@@ -1,11 +1,8 @@
-import { Outlet, Link, createRootRoute, ScrollRestoration } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
 import { AuthProvider } from "@/lib/auth-context";
-import appCss from "../styles.css?url";
-import { Scripts } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 
 // Create QueryClient as a module-level constant to prevent infinite re-renders
 const queryClient = new QueryClient({
@@ -17,33 +14,19 @@ const queryClient = new QueryClient({
   },
 });
 
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PropFlow CRM — Real Estate Sales Platform</title>
-        <meta name="description" content="Multi-tenant CRM for real estate brokers, developers, and resellers. Capture leads, manage pipelines, schedule visits, and close deals faster." />
-        <meta property="og:title" content="PropFlow CRM" />
-        <meta property="og:description" content="Real estate CRM for brokers, developers and resellers." />
-        <meta property="og:type" content="website" />
-        <meta name="twitter:card" content="summary" />
-        <link rel="stylesheet" href={appCss} />
-      </head>
-      <body>
-        {children}
-        <ScrollRestoration />
-        <Scripts />
-      </body>
-    </html>
-  );
-}
-
 export const Route = createRootRoute({
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
+  head: () => ({
+    meta: [
+      { title: "PropFlow CRM — Real Estate Sales Platform" },
+      { name: "description", content: "Multi-tenant CRM for real estate brokers, developers, and resellers. Capture leads, manage pipelines, schedule visits, and close deals faster." },
+      { property: "og:title", content: "PropFlow CRM" },
+      { property: "og:description", content: "Real estate CRM for brokers, developers and resellers." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
 });
 
 function RootComponent() {
