@@ -101,10 +101,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Update state synchronously (not deferred)
       setProfile(profileToSet);
       setRoles(rolesToSet);
+      setLoading(false); // ✅ CRITICAL FIX: Set loading to false after profile loads
     } catch (error) {
       console.error("Error loading profile:", error);
       setProfile(null);
       setRoles([]);
+      setLoading(false); // ✅ Also set loading to false on error
     }
   };
 
