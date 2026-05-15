@@ -183,80 +183,80 @@ function LeadsInbox() {
             </table>
           </div>
           
-          {/* Virtualized scrollable container */}
-          <div
-            ref={parentRef}
-            className="h-[calc(100vh-320px)] overflow-x-auto overflow-y-auto"
-            style={{ contain: 'strict' }}
-          >
-            <div
-              style={{
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                width: '100%',
-                position: 'relative',
-              }}
-            >
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const lead = filtered[virtualRow.index];
-                const owner = getOwner(lead.assignedTo);
-                
-                return (
-                  <div
-                    key={virtualRow.key}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    <table className="w-full text-sm min-w-[800px]">
-                      <tbody>
-                        <tr className="group border-t transition-colors hover:bg-muted/30">
-                          <td className="w-10 px-3 py-3"><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggle(lead.id)} /></td>
-                          <td className="px-3 py-3">
-                            <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="flex items-center gap-2">
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-medium text-foreground hover:text-primary">{lead.name}</span>
-                                  {lead.hot && <HotBadge />}
-                                </div>
-                                <div className="text-xs text-muted-foreground">{lead.email}</div>
-                              </div>
-                            </Link>
-                          </td>
-                          <td className="px-3 py-3"><StageBadge stage={lead.stage} /></td>
-                          <td className="px-3 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
-                                <div className={`h-full rounded-full ${lead.score >= 75 ? `bg-success` : lead.score >= 50 ? `bg-warning` : `bg-muted-foreground/40`}`} style={{ width: `${lead.score}%` }} />
-                              </div>
-                              <span className="text-xs tabular-nums text-muted-foreground">{lead.score}</span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 font-medium tabular-nums">{formatCurrency(lead.budget)}</td>
-                          <td className="px-3 py-3 capitalize text-muted-foreground">{lead.source}</td>
-                          <td className="px-3 py-3">{owner && <div className="flex items-center gap-2"><UserAvatar userId={owner.id} /><span className="text-xs">{owner.name.split(" ")[0]}</span></div>}</td>
-                          <td className="px-3 py-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(lead.lastActivityAt), { addSuffix: true })}</td>
-                          <td className="w-24 px-3 py-3">
-                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                              <LogActivityDialog leadId={lead.id} type="call" title="Log call" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Phone className="h-3.5 w-3.5" /></Button>} />
-                              <LogActivityDialog leadId={lead.id} type="email" title="Log email" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Mail className="h-3.5 w-3.5" /></Button>} />
-                            </div>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          {filtered.length === 0 && (
+          {/* Virtualized scrollable container or empty state */}
+          {filtered.length === 0 ? (
             <div className="p-12 text-center text-sm text-muted-foreground">No leads match your filters.</div>
+          ) : (
+            <div
+              ref={parentRef}
+              className="h-[calc(100vh-320px)] overflow-x-auto overflow-y-auto"
+              style={{ contain: 'strict' }}
+            >
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const lead = filtered[virtualRow.index];
+                  const owner = getOwner(lead.assignedTo);
+                  
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <table className="w-full text-sm min-w-[800px]">
+                        <tbody>
+                          <tr className="group border-t transition-colors hover:bg-muted/30">
+                            <td className="w-10 px-3 py-3"><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggle(lead.id)} /></td>
+                            <td className="px-3 py-3">
+                              <Link to="/leads/$leadId" params={{ leadId: lead.id }} className="flex items-center gap-2">
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-medium text-foreground hover:text-primary">{lead.name}</span>
+                                    {lead.hot && <HotBadge />}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{lead.email}</div>
+                                </div>
+                              </Link>
+                            </td>
+                            <td className="px-3 py-3"><StageBadge stage={lead.stage} /></td>
+                            <td className="px-3 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
+                                  <div className={`h-full rounded-full ${lead.score >= 75 ? `bg-success` : lead.score >= 50 ? `bg-warning` : `bg-muted-foreground/40`}`} style={{ width: `${lead.score}%` }} />
+                                </div>
+                                <span className="text-xs tabular-nums text-muted-foreground">{lead.score}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 font-medium tabular-nums">{formatCurrency(lead.budget)}</td>
+                            <td className="px-3 py-3 capitalize text-muted-foreground">{lead.source}</td>
+                            <td className="px-3 py-3">{owner && <div className="flex items-center gap-2"><UserAvatar userId={owner.id} /><span className="text-xs">{owner.name.split(" ")[0]}</span></div>}</td>
+                            <td className="px-3 py-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(lead.lastActivityAt), { addSuffix: true })}</td>
+                            <td className="w-24 px-3 py-3">
+                              <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                <LogActivityDialog leadId={lead.id} type="call" title="Log call" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Phone className="h-3.5 w-3.5" /></Button>} />
+                                <LogActivityDialog leadId={lead.id} type="email" title="Log email" trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Mail className="h-3.5 w-3.5" /></Button>} />
+                              </div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
       </div>
