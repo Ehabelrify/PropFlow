@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings")({
+  beforeLoad: async ({ context }) => {
+    const { profile } = context;
+    
+    // Only managers and super_admins can access tenant settings
+    if (!["manager", "super_admin"].includes(profile.role)) {
+      throw redirect({ to: "/" });
+    }
+    
+    return {};
+  },
   head: () => ({ meta: [{ title: "Settings — PropFlow CRM" }, { name: "description", content: "Profile, workspace, branding, and integrations." }] }),
   component: SettingsPage,
 });

@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useRedeemInvitation } from "@/hooks/use-supabase";
 import { toast } from "sonner";
+import { sanitizeText } from "@/lib/sanitize";
 
 export const Route = createFileRoute("/join")({
   head: () => ({
@@ -32,18 +33,41 @@ function JoinPage() {
   }, [isAuthed, loading, profile, navigate]);
 
   const handleSubmit = async () => {
-    if (!code.trim()) return toast.error("Enter an invitation code");
-    if (!user?.id) return toast.error("Sign in required");
-    setBusy(true);
-    redeem.mutate({ code: code.trim().toUpperCase(), userId: user.id }, {
-      onSuccess: async () => {
-        toast.success("Joined workspace!");
-        setSuccess(true);
-        await refresh();
-      },
-      onError: (e) => toast.error(e.message),
-      onSettled: () => setBusy(false),
-    });
+    try {
+      // Validate and sanitize invitation code
+      const sanitizedCode = sanitizeText(code, 10).trim().toUpperCase();
+      
+      if (!sanitizedCode || sanitizedCode.length < 3) {
+        toast.error("Enter a valid invitation code");
+        return;
+      }
+      
+      if (!user?.id) {
+        toast.error("Sign in required");
+        return;
+      }
+      
+      // Validate code format (alphanumeric only)
+      if (!/^[A-Z0-9]+$/.test(sanitizedCode)) {
+        toast.error("Invalid invitation code format");
+        return;
+      }
+      
+      setBusy(true);
+      
+      redeem.mutate({ code: sanitizedCode, userId: user.id }, {
+        onSuccess: async () => {
+          toast.success("Joined workspace!");
+          setSuccess(true);
+          await refresh();
+        },
+        onError: (e) => toast.error(e.message),
+        onSettled: () => setBusy(false),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invalid input");
+      setBusy(false);
+    }
   };
 
   // If already in a workspace, redirect

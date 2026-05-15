@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { Mail, Copy, Check, Plus, KeyRound, Trash2, UserCog, Users, AlertTriangle, Building2 } from "lucide-react";
 import { PageHeader } from "@/components/crm/PageHeader";
@@ -26,6 +26,16 @@ import { formatDistanceToNow } from "date-fns";
 const NO_TEAM_VALUE = "__none__";
 
 export const Route = createFileRoute("/_authenticated/team")({
+  beforeLoad: async ({ context }) => {
+    const { profile } = context;
+    
+    // Only managers, leaders, and super_admins can manage team
+    if (!["manager", "leader", "super_admin"].includes(profile.role)) {
+      throw redirect({ to: "/" });
+    }
+    
+    return {};
+  },
   head: () => ({ meta: [{ title: "Team — PropFlow CRM" }] }),
   component: TeamPage,
 });

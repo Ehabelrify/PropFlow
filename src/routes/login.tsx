@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Building2, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, Building2, Clock, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
+import { sanitizeEmail, sanitizeText } from "@/lib/sanitize";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
@@ -32,53 +34,179 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const renderCount = useRef(0);
-
-  // Track render count
-  renderCount.current++;
-  console.log(`[LOGIN] Render #${renderCount.current}`, { mode, email: email ? `${email.length} chars` : "", password: password ? `${password.length} chars` : "", loading, isAuthed });
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [rateLimitMessage, setRateLimitMessage] = useState("");
+  const cooldownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!loading && isAuthed) {
-      console.log(`[LOGIN] User authenticated, redirecting...`);
       navigate({ to: (redirect as any) || "/" });
     }
   }, [isAuthed, loading, redirect, navigate]);
 
+  useEffect(() => {
+    return () => {
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+      }
+    };
+  }, []);
+
   const onSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Welcome back");
-    navigate({ to: (redirect as any) || "/" });
+    
+    try {
+      // Sanitize inputs
+      const sanitizedEmail = sanitizeEmail(email);
+      const sanitizedPassword = sanitizeText(password, 100);
+      
+      const { error } = await supabase.auth.signInWithPassword({
+        email: sanitizedEmail,
+        password: sanitizedPassword
+      });
+      
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      
+      toast.success("Welcome back");
+      navigate({ to: (redirect as any) || "/" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invalid input");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name }, emailRedirectTo: `${window.location.origin}/` },
-    });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Account created — you can now sign in");
-    setMode("signin");
+    
+    try {
+      // Sanitize inputs
+      const sanitizedEmail = sanitizeEmail(email);
+      const sanitizedPassword = sanitizeText(password, 100);
+      const sanitizedName = sanitizeText(name, 100);
+      
+      const { error } = await supabase.auth.signUp({
+        email: sanitizedEmail,
+        password: sanitizedPassword,
+        options: {
+          data: { name: sanitizedName },
+          emailRedirectTo: `${window.location.origin}/`
+        },
+      });
+      
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      
+      toast.success("Account created — you can now sign in");
+      setMode("signin");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invalid input");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startCooldown = (seconds: number) => {
+    if (cooldownIntervalRef.current) {
+      clearInterval(cooldownIntervalRef.current);
+    }
+
+    setCooldownSeconds(seconds);
+
+    cooldownIntervalRef.current = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev <= 1) {
+          if (cooldownIntervalRef.current) {
+            clearInterval(cooldownIntervalRef.current);
+            cooldownIntervalRef.current = null;
+          }
+          setRateLimitMessage("");
+          return 0;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const formatCooldownTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    }
+
+    return `${remainingSeconds}s`;
   };
 
   const onForgot = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!email) {
+      toast.error("Please enter your email address");
+      return;
+    }
+
     setBusy(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Reset link sent — check your inbox");
-    setMode("signin");
+    setRateLimitMessage("");
+
+    try {
+      // Sanitize email input
+      const normalizedEmail = sanitizeEmail(email);
+
+      const { data: rateLimitCheck, error: rateLimitError } = await supabase.rpc("check_password_reset_rate_limit", {
+        p_email: normalizedEmail,
+        p_ip_address: null,
+      });
+
+      if (rateLimitError) {
+        // Rate limit check failed, but continue with the request
+      }
+
+      if (rateLimitCheck && !rateLimitCheck.allowed) {
+        const message =
+          typeof rateLimitCheck.message === "string"
+            ? rateLimitCheck.message
+            : "Too many password reset attempts. Please try again later.";
+
+        setRateLimitMessage(message);
+
+        if (typeof rateLimitCheck.retry_after === "number" && rateLimitCheck.retry_after > 0) {
+          startCooldown(rateLimitCheck.retry_after);
+        }
+
+        toast.error(message);
+        return;
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      await supabase.rpc("log_password_reset_attempt", {
+        p_email: normalizedEmail,
+        p_ip_address: null,
+        p_success: !error,
+      });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success("Reset link sent — check your inbox");
+      setMode("signin");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -151,9 +279,23 @@ function LoginPage() {
 
           {mode === "forgot" && (
             <form onSubmit={onForgot} className="mt-5 space-y-3">
-              <Field label="Email" type="email" value={email} onChange={setEmail} />
-              <Button type="submit" disabled={busy} className="w-full bg-gradient-brand text-primary-foreground">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
+              {rateLimitMessage && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="flex items-center justify-between gap-3">
+                    <span>{rateLimitMessage}</span>
+                    {cooldownSeconds > 0 && (
+                      <span className="flex items-center gap-1 whitespace-nowrap font-mono text-xs">
+                        <Clock className="h-3 w-3" />
+                        {formatCooldownTime(cooldownSeconds)}
+                      </span>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Field label="Email" type="email" value={email} onChange={setEmail} disabled={busy || cooldownSeconds > 0} />
+              <Button type="submit" disabled={busy || cooldownSeconds > 0} className="w-full bg-gradient-brand text-primary-foreground">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : cooldownSeconds > 0 ? `Wait ${formatCooldownTime(cooldownSeconds)}` : "Send reset link"}
               </Button>
               <button type="button" className="block w-full text-center text-xs text-muted-foreground hover:text-foreground" onClick={() => setMode("signin")}>
                 Back to sign in
@@ -166,21 +308,25 @@ function LoginPage() {
   );
 }
 
-function Field({ label, value, onChange, type = "text", hint }: { label: string; value: string; onChange: (v: string) => void; type?: string; hint?: string }) {
-  const handleFocus = () => {
-    console.log(`[INPUT] Focus on "${label}" field`, { currentValue: value });
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    console.log(`[INPUT] "${label}" changed`, { length: newValue.length });
-    onChange(newValue);
-  };
-
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+  hint,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  hint?: string;
+  disabled?: boolean;
+}) {
   return (
     <div>
       <Label className="text-xs">{label}</Label>
-      <Input type={type} value={value} onChange={handleChange} onFocus={handleFocus} required className="mt-1" />
+      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} required disabled={disabled} className="mt-1" />
       {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );

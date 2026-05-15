@@ -7,6 +7,8 @@ import { useProperties } from "@/hooks/use-supabase";
 import { formatCurrency } from "@/lib/constants";
 import { NewPropertyDialog } from "@/components/crm/dialogs";
 import { useAuth } from "@/lib/auth-context";
+import { PropertyImage } from "@/components/PropertyImage";
+import { getPropertyImageUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/properties")({
   head: () => ({ meta: [{ title: "Properties — PropFlow CRM" }] }),
@@ -27,7 +29,12 @@ function PropertiesPage() {
       <div className="grid gap-4 p-6 sm:grid-cols-2 xl:grid-cols-3">
         {(properties as any[]).map(p => (
           <Card key={p.id} className="overflow-hidden shadow-card group">
-            <img src={p.image ?? ""} alt={p.title} className="h-44 w-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+            <PropertyImage
+              src={getPropertyImageUrl(p.image)}
+              alt={p.title}
+              className="h-44 w-full object-cover transition-transform group-hover:scale-105"
+              fallbackClassName="h-44 w-full"
+            />
             <div className="p-4">
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">{p.type}</span>

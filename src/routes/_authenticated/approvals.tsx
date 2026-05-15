@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shield, CheckCircle2, XCircle, Clock, Mail, Key, UserCog, Loader2, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/crm/PageHeader";
@@ -15,6 +15,16 @@ import { format, formatDistanceToNow } from "date-fns";
 import { UserAvatar } from "@/components/crm/Avatar";
 
 export const Route = createFileRoute("/_authenticated/approvals")({
+  beforeLoad: async ({ context }) => {
+    const { profile } = context;
+    
+    // Only managers and super_admins can approve bulk operations
+    if (!["manager", "super_admin"].includes(profile.role)) {
+      throw redirect({ to: "/" });
+    }
+    
+    return {};
+  },
   head: () => ({ meta: [{ title: "Approvals — PropFlow CRM" }] }),
   component: ApprovalsPage,
 });

@@ -1,9 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useState, useMemo } from "react";
 import { Building2, Users, Activity, Ban, Plus, ShieldCheck, Server, Edit2, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRole } from "@/lib/role-context";
 import { useTenants, useApproveTenant, usePlatformHealth } from "@/hooks/use-supabase";
 import { format } from "date-fns";
@@ -17,17 +19,48 @@ import { useUpdateTenant } from "@/hooks/use-supabase";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin")({
+  beforeLoad: async ({ context }) => {
+    const { profile } = context;
+    
+    // Only super_admins can access admin panel
+    if (profile.role !== "super_admin") {
+      throw redirect({
+        to: "/",
+        search: { error: "unauthorized" }
+      });
+    }
+    
+    return {};
+  },
   head: () => ({ meta: [{ title: "Platform Admin — PropFlow CRM" }, { name: "description", content: "Super admin console." }] }),
   component: AdminPage,
 });
 
 function AdminPage() {
-  const { has } = useRole();
+  const { has, scopedLeads } = useRole();
   const { data: tenants = [], isLoading } = useTenants();
   const { data: health, isLoading: healthLoading } = usePlatformHealth();
   const updateTenant = useUpdateTenant();
   const approveTenant = useApproveTenant();
   const [processing, setProcessing] = useState<string | null>(null);
+  const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
+
+  // Filter leads by selected tenant
+  const filteredLeads = useMemo(() => {
+    if (!selectedTenant || selectedTenant === "all") return scopedLeads;
+    return scopedLeads.filter(lead => lead.tenantId === selectedTenant);
+  }, [scopedLeads, selectedTenant]);
+
+  // Get unique tenants from leads
+  const uniqueTenants = useMemo(() => {
+    const tenantsMap = new Map();
+    scopedLeads.forEach(lead => {
+      if (lead.tenant && !tenantsMap.has(lead.tenantId)) {
+        tenantsMap.set(lead.tenantId, lead.tenant);
+      }
+    });
+    return Array.from(tenantsMap.values());
+  }, [scopedLeads]);
 
   if (!has("platform.view")) {
     return (
@@ -243,6 +276,118 @@ function AdminPage() {
           {health && (
             <p className="mt-2 text-[10px] text-muted-foreground">Last updated: {new Date(health.fetchedAt).toLocaleTimeString()}</p>
           )}
+        </Card>
+
+        {/* Cross-Tenant Leads Section */}
+        <Card className="overflow-hidden shadow-card">
+          <div className="flex items-center justify-between border-b px-5 py-3">
+            <div>
+              <h3 className="text-sm font-semibold">Platform Leads</h3>
+              <p className="text-xs text-muted-foreground">All leads across all tenants.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Select
+                value={selectedTenant || "all"}
+                onValueChange={(value) => setSelectedTenant(value === "all" ? null : value)}
+              >
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="All Tenants" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Tenants ({scopedLeads.length} leads)</SelectItem>
+                  {uniqueTenants.map(tenant => {
+                    const count = scopedLeads.filter(l => l.tenantId === tenant.id).length;
+                    return (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        {tenant.name} ({count} leads)
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Stats Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 bg-muted/30 border-b">
+            <div className="text-center">
+              <div className="text-xs text-muted-foreground">Total Tenants</div>
+              <div className="text-2xl font-bold mt-1">{uniqueTenants.length}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-muted-foreground">Total Leads</div>
+              <div className="text-2xl font-bold mt-1">{scopedLeads.length}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-muted-foreground">Filtered Leads</div>
+              <div className="text-2xl font-bold mt-1">{filteredLeads.length}</div>
+            </div>
+          </div>
+
+          {/* Leads List */}
+          <div className="p-5">
+            <h4 className="text-sm font-semibold mb-4">
+              {selectedTenant
+                ? `Leads from ${uniqueTenants.find(t => t.id === selectedTenant)?.name}`
+                : 'All Platform Leads'}
+            </h4>
+            {filteredLeads.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Activity className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <p className="text-sm">No leads found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredLeads.slice(0, 50).map(lead => (
+                  <Card key={lead.id} className="p-4 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h5 className="font-medium truncate">{lead.name}</h5>
+                          {lead.tenant && (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              <Building2 className="h-3 w-3 mr-1" />
+                              {lead.tenant.name}
+                            </Badge>
+                          )}
+                          {lead.hot && (
+                            <Badge variant="destructive" className="text-xs shrink-0">
+                              🔥 Hot
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-0.5 text-sm text-muted-foreground">
+                          <p className="truncate">{lead.email}</p>
+                          {lead.phone && <p>{lead.phone}</p>}
+                          {lead.team && (
+                            <p className="text-xs">
+                              Team: {lead.team.name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <Badge className="mb-2">{lead.stage}</Badge>
+                        <p className="text-xs text-muted-foreground">
+                          Score: {lead.score}
+                        </p>
+                        {lead.budget > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            ${lead.budget.toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+                {filteredLeads.length > 50 && (
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    Showing 50 of {filteredLeads.length} leads
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </Card>
       </div>
     </div>

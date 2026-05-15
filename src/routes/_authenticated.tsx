@@ -1,10 +1,10 @@
-import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { useAuth } from "@/lib/auth-context";
-import { Loader2, Clock } from "lucide-react";
+import { Loader2, Clock, AlertCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,9 +12,26 @@ import { supabase } from "@/integrations/supabase/client";
 const db = supabase as any;
 
 export const Route = createFileRoute("/_authenticated")({
-  beforeLoad: async () => {
-    // Guard runs server-side too; redirect handled in component
-    return {};
+  beforeLoad: async ({ context, location }) => {
+    const profile = context.auth?.profile;
+    
+    if (!profile) {
+      throw redirect({
+        to: "/login",
+        search: { redirect: location.href },
+      });
+    }
+    
+    // Check tenant status
+    if (profile.tenant_status === "suspended") {
+      throw redirect({ to: "/suspended" });
+    }
+    
+    if (profile.tenant_status === "pending" || profile.tenant_status === "rejected") {
+      // Allow through - will be handled by component
+    }
+    
+    return { profile };
   },
   component: AuthLayout,
 });
@@ -56,8 +73,33 @@ function AuthLayout() {
     );
   }
 
-  if (tenantPending) {
+  if (tenantPending || profile?.tenant_status === "suspended") {
     const isRejected = profile?.tenant_status === "rejected";
+    const isSuspended = profile?.tenant_status === "suspended";
+    
+    if (isSuspended) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted/40 px-4">
+          <Card className="max-w-md p-8 text-center shadow-card">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+              <AlertCircle className="h-7 w-7 text-destructive" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold">Account Suspended</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your workspace has been suspended. Please contact support for assistance.
+            </p>
+            <Button
+              className="mt-5"
+              variant="outline"
+              onClick={() => supabase.auth.signOut()}
+            >
+              Sign Out
+            </Button>
+          </Card>
+        </div>
+      );
+    }
+    
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted/40 px-4">
         <Card className="max-w-md p-8 text-center shadow-card">

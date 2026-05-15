@@ -52,16 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const stateUpdateCount = useRef(0);
 
   const loadProfile = async (uid: string, currentSession?: Session | null) => {
-    const startTime = performance.now();
-    console.log(`[AUTH] loadProfile START for uid: ${uid}`, { timestamp: new Date().toISOString() });
-    
     try {
-      console.log(`[AUTH] Fetching profile and roles from Supabase...`);
       const [{ data: p }, { data: r }] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", uid),
       ]);
-      console.log(`[AUTH] Profile/roles fetched successfully`, { profile: p, rolesCount: (r ?? []).length, duration: `${(performance.now() - startTime).toFixed(2)}ms` });
 
       const activeSession = currentSession;
 
@@ -104,10 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Update state synchronously (not deferred)
-      console.log(`[AUTH] Updating profile and roles...`);
       setProfile(profileToSet);
       setRoles(rolesToSet);
-      console.log(`[AUTH] loadProfile COMPLETE`, { duration: `${(performance.now() - startTime).toFixed(2)}ms` });
     } catch (error) {
       console.error("Error loading profile:", error);
       setProfile(null);
@@ -127,25 +120,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
         authStateChangeCount++;
-        console.log(`[AUTH] onAuthStateChange fired (#${authStateChangeCount}) - event: ${_event}`, { 
-          hasSession: !!newSession, 
-          userId: newSession?.user?.id,
-          timestamp: new Date().toISOString()
-        });
         
         if (!mounted) return;
 
         // Update session SYNCHRONOUSLY to prevent React error #185
         // Only defer Supabase calls, not state updates
         setSession(newSession);
-        console.log(`[AUTH] Session state updated`, { isAuthed: !!newSession });
 
         if (newSession?.user?.id) {
           // CRITICAL: defer supabase calls out of the auth callback to avoid
           // deadlocking the GoTrue lock (otherwise signIn/signOut hang forever).
           setTimeout(() => {
             if (mounted) {
-              console.log(`[AUTH] Triggering loadProfile after timeout`);
               loadProfile(newSession.user.id, newSession);
             }
           }, 0);
@@ -162,25 +148,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // Initial session load - update state synchronously, defer only Supabase calls
-    console.log(`[AUTH] Getting initial session...`);
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
 
       // Update session synchronously
       setSession(data.session);
-      console.log(`[AUTH] Initial session loaded`, { hasSession: !!data.session });
 
       if (data.session?.user?.id) {
         setTimeout(() => {
           if (mounted) {
-            console.log(`[AUTH] Triggering loadProfile from initial session`);
             loadProfile(data.session!.user.id, data.session);
           }
         }, 0);
       } else {
         // Only set loading false here if we haven't already done so via auth state change
         if (!initialLoadDone) {
-          console.log(`[AUTH] Initial load complete - no session found`);
           setLoading(false);
           initialLoadDone = true;
         }
@@ -222,16 +204,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile?.tenant_status === "pending_approval" ||
       profile?.tenant_status === "rejected",
   }), [session, profile, roles, loading, hasRole, refresh, signOut]);
-
-  // Track when context value actually changes
-  useEffect(() => {
-    stateUpdateCount.current++;
-    console.log(`[AUTH] Context value changed #${stateUpdateCount.current}`, { 
-      isAuthed: value.isAuthed, 
-      loading: value.loading, 
-      hasProfile: !!value.profile 
-    });
-  }, [value]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

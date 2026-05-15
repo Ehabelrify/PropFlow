@@ -80,6 +80,22 @@ export interface Lead {
   updatedAt: string;
   lastActivityAt: string;
   utmSource?: string;
+  // Populated from joins
+  tenant?: {
+    id: string;
+    name: string;
+    status?: string;
+  };
+  team?: {
+    id: string;
+    name: string;
+  };
+  assigned_user?: {
+    id: string;
+    full_name: string;
+    email: string;
+    avatar_url?: string;
+  };
 }
 
 export interface Activity {

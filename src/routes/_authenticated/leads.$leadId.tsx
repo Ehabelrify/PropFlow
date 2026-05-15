@@ -3,16 +3,21 @@ import { useMemo, useState, useEffect } from "react";
 import {
   ArrowLeft, Phone, Mail, MessageCircle, Calendar, Plus, MapPin, Building2,
   FileText, ArrowRight, CheckCircle2, Clock, CircleDot, Send, Flame, X, Tag, Edit3, PlusCircle,
+  XCircle, Undo2,
 } from "lucide-react";
 import { formatCurrency, PIPELINE_STAGES } from "@/lib/constants";
 import { useRole } from "@/lib/role-context";
 import { useAuth } from "@/lib/auth-context";
-import { useLead, useUpdateLead, useActivities, useTasks, useAppointments, useProperties, useCreateActivity, useProfiles } from "@/hooks/use-supabase";
+import { useLead, useUpdateLead, useActivities, useTasks, useAppointments, useProperties, useCreateActivity, useProfiles, useUpdateTask } from "@/hooks/use-supabase";
+import { useRealtimeActivities, useRealtimeTasks, useRealtimeAppointments } from "@/hooks/use-realtime";
+import { PropertyImage } from "@/components/PropertyImage";
+import { getPropertyImageUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,6 +26,8 @@ import { UserAvatar } from "@/components/crm/Avatar";
 import { format, formatDistanceToNow } from "date-fns";
 import { LogActivityDialog, ScheduleVisitDialog, NewTaskDialog } from "@/components/crm/dialogs";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 type TimelineFilter = "all" | "calls" | "emails" | "notes" | "tasks" | "appointments" | "stages";
 
@@ -76,6 +83,207 @@ function priorityDot(priority: string) {
   return <span className={`inline-block h-1.5 w-1.5 rounded-full ${c}`} />;
 }
 
+function LeadCompletionButtons({ leadId, currentStage }: { leadId: string; currentStage: string }) {
+  const queryClient = useQueryClient();
+  
+  const updateLeadStageMutation = useMutation({
+    mutationFn: async ({ stage, reason }: { stage: string; reason?: string }) => {
+      const updates: any = {
+        stage,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Set completion timestamps
+      if (stage === "won") {
+        updates.won_at = new Date().toISOString();
+        updates.lost_at = null;
+        updates.lost_reason = null;
+      } else if (stage === "lost") {
+        updates.lost_at = new Date().toISOString();
+        updates.won_at = null;
+        if (reason) updates.lost_reason = reason;
+      }
+      
+      const { error } = await supabase
+        .from("leads")
+        .update(updates)
+        .eq("id", leadId);
+      
+      if (error) throw error;
+      
+      // Log activity
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("activities").insert({
+        lead_id: leadId,
+        type: "stage_change",
+        description: `Lead marked as ${stage}${reason ? `: ${reason}` : ''}`,
+        created_by: user?.id,
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["lead", leadId] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["activities", leadId] });
+      toast.success(`Lead marked as ${variables.stage}`);
+    },
+    onError: (error) => {
+      console.error("Error updating lead:", error);
+      toast.error("Failed to update lead");
+    },
+  });
+  
+  const reopenLeadMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("leads")
+        .update({
+          stage: "contacted",
+          won_at: null,
+          lost_at: null,
+          lost_reason: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", leadId);
+      
+      if (error) throw error;
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("activities").insert({
+        lead_id: leadId,
+        type: "stage_change",
+        description: "Lead reopened",
+        created_by: user?.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lead", leadId] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast.success("Lead reopened");
+    },
+    onError: (error) => {
+      console.error("Error reopening lead:", error);
+      toast.error("Failed to reopen lead");
+    },
+  });
+  
+  const isCompleted = currentStage === "won" || currentStage === "lost";
+  const isWon = currentStage === "won";
+  
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        {!isCompleted && (
+          <>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="default" className="flex-1">
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Mark as Won
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Mark Lead as Won?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will move the lead to the "Won" stage and record the win timestamp.
+                    You can reopen the lead later if needed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => updateLeadStageMutation.mutate({ stage: "won" })}
+                    disabled={updateLeadStageMutation.isPending}
+                  >
+                    {updateLeadStageMutation.isPending ? "Updating..." : "Confirm"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="flex-1">
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Mark as Lost
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Mark Lead as Lost?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will move the lead to the "Lost" stage. You can optionally provide a reason.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="py-4">
+                  <label className="text-sm font-medium">Reason (optional)</label>
+                  <Textarea
+                    id="lost-reason"
+                    placeholder="e.g., Budget constraints, chose competitor, timing not right..."
+                    className="mt-2"
+                  />
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      const reason = (document.getElementById("lost-reason") as HTMLTextAreaElement)?.value;
+                      updateLeadStageMutation.mutate({ stage: "lost", reason });
+                    }}
+                    disabled={updateLeadStageMutation.isPending}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {updateLeadStageMutation.isPending ? "Updating..." : "Confirm"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
+        
+        {isCompleted && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="w-full">
+                <Undo2 className="mr-2 h-4 w-4" />
+                Reopen Lead
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reopen Lead?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will move the lead back to "Contacted" stage and clear the {isWon ? "won" : "lost"} timestamp.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => reopenLeadMutation.mutate()}
+                  disabled={reopenLeadMutation.isPending}
+                >
+                  {reopenLeadMutation.isPending ? "Reopening..." : "Reopen"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+      
+      {isCompleted && (
+        <div className={`p-4 rounded-lg ${
+          isWon ? 'bg-green-50 border border-green-200 dark:bg-green-950 dark:border-green-800' :
+                  'bg-red-50 border border-red-200 dark:bg-red-950 dark:border-red-800'
+        }`}>
+          <p className={`text-sm font-medium ${isWon ? 'text-green-900 dark:text-green-100' : 'text-red-900 dark:text-red-100'}`}>
+            {isWon ? '🎉 Lead Won!' : '❌ Lead Lost'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/_authenticated/leads/$leadId")({
   head: ({ params }) => ({
     meta: [
@@ -92,13 +300,19 @@ function LeadDetail() {
   const { user, orgRole } = useRole();
   const { profile } = useAuth();
   const { data: lead, isLoading } = useLead(leadId);
-  const { data: activities = [] } = useActivities(leadId);
+  const { data: activities = [] } = useActivities({ lead_id: leadId });
   const { data: tasks = [] } = useTasks({ lead_id: leadId });
   const { data: appointments = [] } = useAppointments({ lead_id: leadId });
   const { data: properties = [] } = useProperties({ tenant_id: lead?.tenant_id, limit: 50 });
   const { data: profiles = [] } = useProfiles(lead?.tenant_id);
   const updateLead = useUpdateLead();
   const createActivity = useCreateActivity();
+  const updateTask = useUpdateTask();
+
+  // Enable real-time updates for this lead's data
+  useRealtimeActivities({ leadId, enabled: !!leadId });
+  useRealtimeTasks({ leadId, enabled: !!leadId });
+  useRealtimeAppointments({ leadId, enabled: !!leadId });
 
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const [noteText, setNoteText] = useState("");
@@ -176,6 +390,22 @@ function LeadDetail() {
       updateLead.mutate({ id: leadId, tags: [...(lead.tags ?? []), t] });
     }
     setNewTag("");
+  };
+
+  const handleTaskToggle = (taskId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "done" ? "open" : "done";
+    updateTask.mutate(
+      { id: taskId, status: newStatus as any },
+      {
+        onSuccess: () => {
+          toast.success(newStatus === "done" ? "Task completed" : "Task reopened");
+        },
+        onError: (error: any) => {
+          toast.error("Failed to update task");
+          console.error("Task update error:", error);
+        },
+      }
+    );
   };
 
   return (
@@ -308,7 +538,11 @@ function LeadDetail() {
                           <span>{(entry.task as any).assigned_user?.name ?? "Unknown"}</span>
                         </div>
                         {entry.task.status !== "done" && (
-                          <button onClick={() => {/* handled via task update */}} className="mt-1.5 text-[11px] font-medium text-primary hover:underline">
+                          <button
+                            onClick={() => handleTaskToggle(entry.task.id, entry.task.status)}
+                            disabled={updateTask.isPending}
+                            className="mt-1.5 text-[11px] font-medium text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
                             Mark complete
                           </button>
                         )}
@@ -396,6 +630,11 @@ function LeadDetail() {
           </Card>
 
           <Card className="p-5 shadow-card">
+            <h3 className="text-sm font-semibold mb-4">Lead Status</h3>
+            <LeadCompletionButtons leadId={leadId} currentStage={lead.stage} />
+          </Card>
+
+          <Card className="p-5 shadow-card">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Requirements</h3>
               <Dialog open={reqDialogOpen} onOpenChange={(o) => { setReqDialogOpen(o); if (o) setReqEdits(lead.requirements || {}); }}>
@@ -440,7 +679,12 @@ function LeadDetail() {
 
           {property ? (
             <Card className="overflow-hidden shadow-card">
-              <img src={property.image ?? ""} alt={property.title} className="h-32 w-full object-cover" loading="lazy" />
+              <PropertyImage
+                src={getPropertyImageUrl(property.image)}
+                alt={property.title}
+                className="h-32 w-full object-cover"
+                fallbackClassName="h-32 w-full"
+              />
               <div className="p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Interested in</p>
@@ -470,7 +714,12 @@ function LeadDetail() {
                   <div className="grid gap-3 py-4 max-h-[60vh] overflow-y-auto">
                     {properties.map(p => (
                       <button key={p.id} onClick={() => updateLead.mutate({ id: leadId, property_interest: p.id })} className="flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50">
-                        <img src={p.image ?? ""} alt="" className="h-12 w-16 rounded object-cover" />
+                        <PropertyImage
+                          src={getPropertyImageUrl(p.image)}
+                          alt={p.title}
+                          className="h-12 w-16 rounded object-cover"
+                          fallbackClassName="h-12 w-16 rounded"
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{p.title}</p>
                           <p className="text-xs text-muted-foreground truncate">{p.location} · {formatCurrency(Number(p.price))}</p>
@@ -492,7 +741,13 @@ function LeadDetail() {
               {(tasks as any[]).length === 0 && <p className="text-xs text-muted-foreground">No tasks yet</p>}
               {(tasks as any[]).map(t => (
                 <li key={t.id} className="flex items-start gap-2 rounded p-1.5 hover:bg-muted/50">
-                  <input type="checkbox" checked={t.status === "done"} onChange={() => {}} className="mt-1 h-3.5 w-3.5 rounded border-border" />
+                  <input
+                    type="checkbox"
+                    checked={t.status === "done"}
+                    onChange={() => handleTaskToggle(t.id, t.status)}
+                    disabled={updateTask.isPending}
+                    className="mt-1 h-3.5 w-3.5 rounded border-border cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className={`text-xs ${t.status === `done` ? `line-through text-muted-foreground` : ``}`}>{t.title}</p>
                     <p className="text-[10px] text-muted-foreground">Due {format(new Date(t.due_at), "MMM d")}</p>

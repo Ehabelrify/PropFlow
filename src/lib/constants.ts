@@ -1,13 +1,13 @@
 import type { PipelineStageDef } from "./types";
 
 export const PIPELINE_STAGES: PipelineStageDef[] = [
-  { id: "new", label: "New", tone: "bg-info/10 text-info border-info/20" },
-  { id: "contacted", label: "Contacted", tone: "bg-accent text-accent-foreground border-border" },
-  { id: "qualified", label: "Qualified", tone: "bg-primary-soft text-primary border-primary/20" },
-  { id: "viewing", label: "Viewing", tone: "bg-warning/15 text-warning-foreground border-warning/30" },
-  { id: "negotiation", label: "Negotiation", tone: "bg-chart-5/15 text-chart-5 border-chart-5/30" },
-  { id: "won", label: "Won", tone: "bg-success/15 text-success border-success/30" },
-  { id: "lost", label: "Lost", tone: "bg-destructive/10 text-destructive border-destructive/20" },
+  { id: "new", label: "New", tone: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800" },
+  { id: "contacted", label: "Contacted", tone: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800" },
+  { id: "qualified", label: "Qualified", tone: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800" },
+  { id: "viewing", label: "Viewing", tone: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800" },
+  { id: "negotiation", label: "Negotiation", tone: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800" },
+  { id: "won", label: "Won", tone: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800" },
+  { id: "lost", label: "Lost", tone: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800" },
 ];
 
 export function formatCurrency(n: number) {

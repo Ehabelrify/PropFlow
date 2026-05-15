@@ -1,14 +1,28 @@
-import { createContext, useContext, useMemo, useCallback, useState, useRef, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useCallback, useState, type ReactNode } from "react";
 import type { User, Lead } from "./types";
 import { useAuth, type AppRole } from "./auth-context";
 import type { Database } from "@/types/database";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeLeads } from "@/hooks/use-realtime";
 
 export function orgRoleOf(u: User | null | undefined): "super_admin" | "manager" | "leader" | "agent" {
   if (!u) return "agent";
   if (u.role === "super_admin") return "super_admin";
-  if (u.role === "agent") return "agent";
-  if (u.role === "manager" && u.teamId) return "leader";
-  return "manager";
+  
+  // Explicit leader role
+  if (u.role === "leader") return "leader";
+  
+  // Manager role
+  if (u.role === "manager") {
+    // Manager with team_id is acting as a team leader
+    if (u.teamId) return "leader";
+    // Manager without team_id is organization manager
+    return "manager";
+  }
+  
+  // Default to agent
+  return "agent";
 }
 
 type DbLead = Database["public"]["Tables"]["leads"]["Row"];
@@ -50,8 +64,8 @@ const ROLE_PERMS: Record<OrgRole, Permission[]> = {
   ],
   leader: [
     "team.view_team_leads", "team.reassign",
-    "leads.create", "leads.update_own",
-    "analytics.view_team", "analytics.view_tenant",
+    "leads.create", "leads.update_own", "leads.delete",
+    "analytics.view_team",
   ],
   agent: [
     "leads.create", "leads.update_own",
@@ -67,7 +81,7 @@ interface RoleContextValue {
   scopeLabel: string;
 }
 
-function dbLeadToMockLead(db: DbLead): Lead {
+function dbLeadToMockLead(db: any): Lead {
   return {
     id: db.id,
     name: db.name,
@@ -88,6 +102,22 @@ function dbLeadToMockLead(db: DbLead): Lead {
     createdAt: db.created_at,
     updatedAt: db.updated_at,
     lastActivityAt: db.last_activity_at,
+    // Map joined data
+    tenant: db.tenant ? {
+      id: db.tenant.id,
+      name: db.tenant.name,
+      status: db.tenant.status,
+    } : undefined,
+    team: db.team ? {
+      id: db.team.id,
+      name: db.team.name,
+    } : undefined,
+    assigned_user: db.assigned_user ? {
+      id: db.assigned_user.id,
+      full_name: db.assigned_user.full_name,
+      email: db.assigned_user.email,
+      avatar_url: db.assigned_user.avatar_url,
+    } : undefined,
   };
 }
 
@@ -96,10 +126,6 @@ const RoleContext = createContext<RoleContextValue | null>(null);
 export function RoleProvider({ children }: { children: ReactNode }) {
   const { profile, roles: authRoles, isAuthed, session } = useAuth();
   const [userId, setUserId] = useState<string>("");
-
-  const renderCount = useRef(0);
-  renderCount.current++;
-  console.log(`[ROLE] RoleProvider render #${renderCount.current}`, { isAuthed, profileId: profile?.id, rolesCount: authRoles.length });
 
   const authUser = useMemo<User | null>(() => {
     if (!session?.user) return null;
@@ -134,6 +160,75 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   // Memoize has function to prevent recreation on every render (CPU freeze fix)
   const has = useCallback((p: Permission) => perms.has(p), [perms]);
 
+  // Fetch leads data with role-based filtering
+  const { data: leadsData = [], isLoading } = useQuery({
+    queryKey: ["leads", profile?.id, profile?.role, profile?.team_id, profile?.tenant_id],
+    queryFn: async () => {
+      if (!profile) return [];
+      
+      let query = supabase.from("leads").select(`
+        *,
+        tenant:tenants(id, name, status),
+        team:teams(id, name),
+        assigned_user:users!assigned_to(id, full_name, email, avatar_url)
+      `);
+      
+      // Determine effective role using orgRoleOf
+      const effectiveRole = orgRoleOf(authUser);
+      
+      if (effectiveRole === "super_admin") {
+        // Super admin sees all leads across all tenants
+      } else if (effectiveRole === "manager") {
+        // Organization-wide leads (manager without team)
+        query = query.eq("tenant_id", profile.tenant_id);
+      } else if (effectiveRole === "leader") {
+        // Team-specific leads
+        if (!profile.team_id) {
+          return [];
+        }
+        query = query.eq("team_id", profile.team_id);
+      } else {
+        // Agent - assigned leads only
+        query = query.eq("assigned_to", profile.id);
+      }
+      
+      const { data, error } = await query.order("created_at", { ascending: false });
+      
+      if (error) {
+        console.error("Error fetching leads:", error);
+        return [];
+      }
+      
+      return data || [];
+    },
+    enabled: !!profile && isAuthed,
+    staleTime: 30000, // 30 seconds
+    refetchOnWindowFocus: true,
+  });
+
+  // Enable real-time updates for leads based on user's scope
+  useRealtimeLeads({
+    tenantId: profile?.tenant_id,
+    teamId: profile?.team_id,
+    enabled: !!profile && isAuthed,
+  });
+
+  const scopedLeads = useMemo(
+    () => leadsData.map(dbLeadToMockLead),
+    [leadsData]
+  );
+
+  const scopeLabel = useMemo(() => {
+    if (!authUser) return "My Leads";
+    
+    const effectiveRole = orgRoleOf(authUser);
+    
+    if (effectiveRole === "super_admin") return "All Tenants (Platform-wide)";
+    if (effectiveRole === "manager") return "Organization";
+    if (effectiveRole === "leader") return "Team";
+    return "My Leads";
+  }, [authUser]);
+
   const value = useMemo<RoleContextValue>(() => {
     if (!user) {
       return {
@@ -146,23 +241,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    // scopedLeads now empty - data fetching moved to route-level
-    const scopedLeads: Lead[] = [];
-    
-    // Keep scopeLabel logic based on role
-    let scopeLabel = "";
-    if (orgRole === "super_admin") {
-      scopeLabel = "Platform-wide";
-    } else if (orgRole === "manager") {
-      scopeLabel = "All teams";
-    } else if (orgRole === "leader") {
-      scopeLabel = "My team";
-    } else {
-      scopeLabel = "All leads";
-    }
-
     return { user, orgRole, setUserId, has, scopedLeads, scopeLabel };
-  }, [user, orgRole, setUserId, has]);
+  }, [user, orgRole, setUserId, has, scopedLeads, scopeLabel]);
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 }

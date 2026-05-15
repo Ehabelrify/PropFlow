@@ -92,6 +92,33 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_attempts: {
+        Row: {
+          attempted_at: string
+          created_at: string
+          email: string
+          id: string
+          ip_address: string | null
+          success: boolean | null
+        }
+        Insert: {
+          attempted_at?: string
+          created_at?: string
+          email: string
+          id?: string
+          ip_address?: string | null
+          success?: boolean | null
+        }
+        Update: {
+          attempted_at?: string
+          created_at?: string
+          email?: string
+          id?: string
+          ip_address?: string | null
+          success?: boolean | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -118,6 +145,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_password_reset_rate_limit: {
+        Args: {
+          p_email: string
+          p_ip_address?: string | null
+        }
+        Returns: Json
+      }
+      cleanup_old_password_reset_attempts: {
+        Args: never
+        Returns: undefined
+      }
       current_tenant: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -125,6 +163,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      log_password_reset_attempt: {
+        Args: {
+          p_email: string
+          p_ip_address?: string | null
+          p_success?: boolean
+        }
+        Returns: undefined
       }
     }
     Enums: {

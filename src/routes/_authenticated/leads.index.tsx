@@ -164,26 +164,29 @@ function LeadsInbox() {
         )}
 
         <div className="overflow-hidden rounded-lg border bg-card shadow-card">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="w-10 px-3 py-2.5"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></th>
-                <th className="px-3 py-2.5 text-left font-medium">Lead</th>
-                <th className="px-3 py-2.5 text-left font-medium">Stage</th>
-                <th className="px-3 py-2.5 text-left font-medium">Score</th>
-                <th className="px-3 py-2.5 text-left font-medium">Budget</th>
-                <th className="px-3 py-2.5 text-left font-medium">Source</th>
-                <th className="px-3 py-2.5 text-left font-medium">Owner</th>
-                <th className="px-3 py-2.5 text-left font-medium">Last activity</th>
-                <th className="w-24 px-3 py-2.5"></th>
-              </tr>
-            </thead>
-          </table>
+          {/* Responsive horizontal scroll wrapper */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[800px]">
+              <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="w-10 px-3 py-2.5"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></th>
+                  <th className="px-3 py-2.5 text-left font-medium">Lead</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Stage</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Score</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Budget</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Source</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Owner</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Last activity</th>
+                  <th className="w-24 px-3 py-2.5"></th>
+                </tr>
+              </thead>
+            </table>
+          </div>
           
           {/* Virtualized scrollable container */}
           <div
             ref={parentRef}
-            className="h-[calc(100vh-320px)] overflow-auto"
+            className="h-[calc(100vh-320px)] overflow-x-auto overflow-y-auto"
             style={{ contain: 'strict' }}
           >
             <div
@@ -209,7 +212,7 @@ function LeadsInbox() {
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
                   >
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[800px]">
                       <tbody>
                         <tr className="group border-t transition-colors hover:bg-muted/30">
                           <td className="w-10 px-3 py-3"><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggle(lead.id)} /></td>
