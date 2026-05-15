@@ -26,7 +26,7 @@ export interface Profile {
   tenant_status?: string | null;
 }
 
-interface AuthCtx {
+export interface AuthCtx {
   session: Session | null;
   user: User | null;
   profile: Profile | null;

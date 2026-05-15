@@ -1,8 +1,8 @@
-import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
+import { Outlet, Link, createRootRouteWithContext } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/lib/role-context";
-import { AuthProvider } from "@/lib/auth-context";
+import { AuthProvider, useAuth, type AuthCtx } from "@/lib/auth-context";
 
 // Create QueryClient as a module-level constant to prevent infinite re-renders
 const queryClient = new QueryClient({
@@ -14,7 +14,9 @@ const queryClient = new QueryClient({
   },
 });
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{
+  auth: AuthCtx | undefined;
+}>()({
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   head: () => ({
@@ -34,11 +36,25 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RoleProvider>
-          <Outlet />
-          <Toaster />
+          <InnerRoot />
         </RoleProvider>
       </AuthProvider>
     </QueryClientProvider>
+  );
+}
+
+function InnerRoot() {
+  const auth = useAuth();
+  const router = Route.useRouter();
+  
+  // Update router context with auth state
+  router.options.context = { auth };
+  
+  return (
+    <>
+      <Outlet />
+      <Toaster />
+    </>
   );
 }
 
