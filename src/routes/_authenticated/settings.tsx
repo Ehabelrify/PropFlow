@@ -14,13 +14,8 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   beforeLoad: async ({ context }) => {
-    const { profile } = context;
-    
-    // Only managers and super_admins can access tenant settings
-    if (!["manager", "super_admin"].includes(profile.role)) {
-      throw redirect({ to: "/" });
-    }
-    
+    // All authenticated users can access settings (for their profile)
+    // Tenant-level settings are conditionally shown based on role
     return {};
   },
   head: () => ({ meta: [{ title: "Settings — PropFlow CRM" }, { name: "description", content: "Profile, workspace, branding, and integrations." }] }),

@@ -50,10 +50,10 @@ export function AppSidebar() {
   const platformItems = visible(platform);
 
   return (
-    <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="border-b border-sidebar-border">
+    <Sidebar collapsible="icon" className="border-r shadow-sm">
+      <SidebarHeader className="border-b border-sidebar-border bg-gradient-subtle">
         <div className="flex items-center gap-2 px-1 py-1.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-brand text-primary-foreground shadow-sm">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-brand text-primary-foreground shadow-button">
             <Building2 className="h-4 w-4" />
           </div>
           {!collapsed && (
@@ -140,9 +140,9 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="border-t border-sidebar-border bg-gradient-subtle">
         <div className="flex items-center gap-2 px-1 py-1.5">
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${user?.avatarColor ?? "bg-gray-500"} text-[11px] font-semibold text-white`}>
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${user?.avatarColor ?? "bg-gray-500"} text-[11px] font-semibold text-white shadow-sm`}>
             {user?.initials ?? "?"}
           </div>
           {!collapsed && (

@@ -26,15 +26,15 @@ export function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <SidebarTrigger className="text-muted-foreground" />
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur-sm shadow-sm supports-[backdrop-filter]:bg-background/95">
+      <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
       <form onSubmit={onSubmit} className="relative hidden flex-1 max-w-md md:block">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search leads, properties, tasks…"
-          className="h-9 border-transparent bg-muted/60 pl-9 focus-visible:bg-background focus-visible:ring-1"
+          className="h-9 border-transparent bg-muted/60 pl-9 shadow-sm focus-visible:bg-background focus-visible:ring-2 focus-visible:shadow-button transition-all"
         />
       </form>
       <div className="ml-auto flex items-center gap-2">
@@ -58,8 +58,8 @@ function ProfileDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex h-9 items-center gap-2.5 rounded-md border border-border/60 bg-card px-3 text-xs hover:bg-muted transition-colors">
-          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${avatarColor} text-[10px] font-semibold text-white`}>
+        <button className="flex h-9 items-center gap-2.5 rounded-md border border-border/60 bg-card px-3 text-xs hover:bg-muted hover:shadow-sm transition-all active:scale-[0.98]">
+          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${avatarColor} text-[10px] font-semibold text-white shadow-sm`}>
             {initials}
           </div>
           <span className="hidden sm:flex flex-col items-start leading-tight min-w-0">
@@ -108,9 +108,9 @@ function NotificationsButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild onClick={() => setNotificationsOpened(true)}>
-        <Button size="sm" variant="ghost" className="relative h-9 w-9 p-0">
+        <Button size="sm" variant="ghost" className="relative h-9 w-9 p-0 hover:bg-accent">
           <Bell className="h-4 w-4" />
-          {overdueCount + hotCount > 0 && <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-hot" />}
+          {overdueCount + hotCount > 0 && <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-hot shadow-sm animate-pulse" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
@@ -144,8 +144,9 @@ function NewLeadButton() {
   return (
     <NewLeadDialog
       trigger={
-        <Button size="sm" className="h-9 gap-1.5 bg-gradient-brand text-primary-foreground shadow-sm hover:opacity-95">
-          <Plus className="h-4 w-4" /> New Lead
+        <Button size="sm" className="h-9 gap-1.5 bg-gradient-brand text-primary-foreground shadow-button hover:shadow-button-hover hover:bg-gradient-hover active:scale-[0.98] transition-all">
+          <Plus className="h-4 w-4" />
+          <span>New Lead</span>
         </Button>
       }
     />

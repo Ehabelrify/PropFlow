@@ -105,10 +105,13 @@
   --sidebar-border: oklch(0.92 0.006 255);
   --sidebar-ring: oklch(0.55 0.13 264);
 
-  --shadow-card: 0 1px 3px 0 oklch(0.2 0.02 260 / 0.05), 0 1px 2px -1px oklch(0.2 0.02 260 / 0.04);
-  --shadow-elevated: 0 8px 24px -8px oklch(0.2 0.02 260 / 0.12), 0 2px 6px -2px oklch(0.2 0.02 260 / 0.06);
+  --shadow-card: 0 1px 3px 0 oklch(0.2 0.02 260 / 0.08), 0 1px 2px -1px oklch(0.2 0.02 260 / 0.06);
+  --shadow-elevated: 0 10px 30px -10px oklch(0.2 0.02 260 / 0.15), 0 4px 8px -4px oklch(0.2 0.02 260 / 0.08);
+  --shadow-button: 0 1px 2px 0 oklch(0.2 0.02 260 / 0.05);
+  --shadow-button-hover: 0 2px 4px 0 oklch(0.2 0.02 260 / 0.1), 0 1px 2px 0 oklch(0.2 0.02 260 / 0.06);
   --gradient-brand: linear-gradient(135deg, oklch(0.5 0.18 264), oklch(0.6 0.18 285));
   --gradient-subtle: linear-gradient(180deg, oklch(0.99 0.003 250), oklch(0.965 0.008 255));
+  --gradient-hover: linear-gradient(135deg, oklch(0.52 0.18 264), oklch(0.62 0.18 285));
 }
 
 .dark {
@@ -161,10 +164,19 @@
   .bg-gradient-subtle {
     background: var(--gradient-subtle);
   }
+  .bg-gradient-hover {
+    background: var(--gradient-hover);
+  }
   .shadow-card {
     box-shadow: var(--shadow-card);
   }
   .shadow-elevated {
     box-shadow: var(--shadow-elevated);
+  }
+  .shadow-button {
+    box-shadow: var(--shadow-button);
+  }
+  .shadow-button-hover {
+    box-shadow: var(--shadow-button-hover);
   }
 }
