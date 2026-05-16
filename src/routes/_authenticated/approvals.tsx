@@ -16,10 +16,14 @@ import { UserAvatar } from "@/components/crm/Avatar";
 
 export const Route = createFileRoute("/_authenticated/approvals")({
   beforeLoad: async ({ context }) => {
-    const { profile } = context;
+    const { auth } = context;
     
-    // Only managers and super_admins can approve bulk operations
-    if (!["manager", "super_admin"].includes(profile.role)) {
+    // Only managers and super_admins can approve bulk operations - check auth roles
+    const hasAccess = auth?.roles?.some((role: string) =>
+      ["manager", "super_admin"].includes(role)
+    );
+    
+    if (!hasAccess) {
       throw redirect({ to: "/" });
     }
     

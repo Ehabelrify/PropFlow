@@ -72,7 +72,7 @@ function LoginPage() {
       }
       
       toast.success("Welcome back");
-      navigate({ to: (redirect as any) || "/" });
+      // Don't navigate here - let the useEffect handle it to avoid double navigation
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid input");
     } finally {

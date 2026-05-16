@@ -54,7 +54,8 @@ function TeamPage() {
 
   // Super admin sees all; manager sees only their tenant; leader sees all but can only invite to own team
   const tenantId = profile?.tenant_id ?? undefined;
-  const { data: profiles = [] } = useProfiles(tenantId);
+  // Super admin should see all profiles (pass undefined), others see their tenant
+  const { data: profiles = [] } = useProfiles(isSuperAdmin ? undefined : tenantId);
   const { data: teams = [] } = useTeams(isSuperAdmin ? undefined : tenantId);
   const { data: allTenants = [] } = useTenants();
   const { data: currentTenant } = useTenant(tenantId);

@@ -162,7 +162,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
   // Fetch leads data with role-based filtering
   const { data: leadsData = [], isLoading } = useQuery({
-    queryKey: ["leads", profile?.id, profile?.role, profile?.team_id, profile?.tenant_id],
+    queryKey: ["leads", profile?.id, authRoles, profile?.team_id, profile?.tenant_id],
     queryFn: async () => {
       if (!profile) return [];
       
@@ -173,22 +173,33 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         assigned_user:users!assigned_to(id, full_name, email, avatar_url)
       `);
       
-      // Determine effective role using orgRoleOf
-      const effectiveRole = orgRoleOf(authUser);
+      // Use authRoles directly instead of orgRoleOf to ensure correct role detection
+      const isSuperAdmin = authRoles.includes("super_admin");
+      const isManager = authRoles.includes("manager");
+      const isLeader = authRoles.includes("leader");
       
-      if (effectiveRole === "super_admin") {
-        // Super admin sees all leads across all tenants
-      } else if (effectiveRole === "manager") {
-        // Organization-wide leads (manager without team)
-        query = query.eq("tenant_id", profile.tenant_id);
-      } else if (effectiveRole === "leader") {
-        // Team-specific leads
-        if (!profile.team_id) {
+      if (isSuperAdmin) {
+        // Super admin sees all leads across all tenants - no filter
+        console.log("Super admin: fetching all leads");
+      } else if (isManager) {
+        // Manager sees all leads in their tenant
+        if (!profile.tenant_id) {
+          console.log("Manager without tenant_id");
           return [];
         }
+        console.log("Manager: fetching tenant leads", profile.tenant_id);
+        query = query.eq("tenant_id", profile.tenant_id);
+      } else if (isLeader) {
+        // Team leader sees team leads
+        if (!profile.team_id) {
+          console.log("Leader without team_id");
+          return [];
+        }
+        console.log("Leader: fetching team leads", profile.team_id);
         query = query.eq("team_id", profile.team_id);
       } else {
         // Agent - assigned leads only
+        console.log("Agent: fetching assigned leads", profile.id);
         query = query.eq("assigned_to", profile.id);
       }
       
@@ -199,6 +210,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         return [];
       }
       
+      console.log(`Fetched ${data?.length || 0} leads`);
       return data || [];
     },
     enabled: !!profile && isAuthed,
