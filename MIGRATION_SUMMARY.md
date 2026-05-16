@@ -12,6 +12,7 @@ This document outlines all changes made to migrate PropFlow CRM to Tailwind CSS 
 
 #### 1.1 Package Dependencies (`package.json`)
 - **Updated**: `tailwindcss` from `^3.4.19` to `^4.0.0`
+- **Added**: `@tailwindcss/postcss` `^4.0.0` (required for PostCSS integration)
 - **Note**: Autoprefixer is still included but Tailwind v4 handles prefixing internally
 
 #### 1.2 Tailwind Configuration (`tailwind.config.js`)
@@ -39,7 +40,7 @@ export default {
 
 #### 1.3 PostCSS Configuration (`postcss.config.js`)
 - **Removed**: `autoprefixer` plugin (Tailwind v4 handles it)
-- Kept only `tailwindcss` plugin
+- **Changed**: `tailwindcss` to `@tailwindcss/postcss` (v4 requirement)
 
 **Before:**
 ```javascript
@@ -55,7 +56,7 @@ export default {
 ```javascript
 export default {
   plugins: {
-    tailwindcss: {},
+    '@tailwindcss/postcss': {},
   },
 };
 ```
