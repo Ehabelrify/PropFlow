@@ -136,7 +136,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       id: profile?.id ?? session.user.id,
       name: (profile?.name || session.user.email?.split("@")[0]) ?? "User",
       email: profile?.email ?? session.user.email ?? "",
-      role: primaryRole === "leader" ? "manager" : (primaryRole === "super_admin" ? "super_admin" : primaryRole === "manager" ? "manager" : "agent"),
+      role: primaryRole, // Fixed: Use primaryRole directly without remapping
       avatarColor: profile?.avatar_color ?? "bg-chart-1",
       initials: profile?.initials ?? (session.user.email?.[0]?.toUpperCase() ?? "?"),
       tenantId: profile?.tenant_id ?? undefined,

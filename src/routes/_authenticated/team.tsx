@@ -27,10 +27,14 @@ const NO_TEAM_VALUE = "__none__";
 
 export const Route = createFileRoute("/_authenticated/team")({
   beforeLoad: async ({ context }) => {
-    const { profile } = context;
+    const { auth } = context;
     
-    // Only managers, leaders, and super_admins can manage team
-    if (!["manager", "leader", "super_admin"].includes(profile.role)) {
+    // Only managers, leaders, and super_admins can manage team - check auth roles
+    const hasAccess = auth?.roles?.some((role: string) =>
+      ["manager", "leader", "super_admin"].includes(role)
+    );
+    
+    if (!hasAccess) {
       throw redirect({ to: "/" });
     }
     

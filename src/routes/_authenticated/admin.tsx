@@ -20,10 +20,10 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async ({ context }) => {
-    const { profile } = context;
+    const { auth } = context;
     
-    // Only super_admins can access admin panel
-    if (profile.role !== "super_admin") {
+    // Only super_admins can access admin panel - check auth roles, not profile.role
+    if (!auth?.roles?.includes("super_admin")) {
       throw redirect({
         to: "/",
         search: { error: "unauthorized" }

@@ -13,7 +13,8 @@ const db = supabase as any;
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ context, location }) => {
-    const profile = context.auth?.profile;
+    const auth = context.auth;
+    const profile = auth?.profile;
     
     if (!profile) {
       throw redirect({
@@ -31,7 +32,8 @@ export const Route = createFileRoute("/_authenticated")({
       // Allow through - will be handled by component
     }
     
-    return { profile };
+    // Pass both profile and auth to child routes
+    return { profile, auth };
   },
   component: AuthLayout,
 });
