@@ -68,14 +68,19 @@ function LoginPage() {
       
       if (error) {
         toast.error(error.message);
+        setBusy(false);
         return;
       }
       
       toast.success("Welcome back");
-      // Don't navigate here - let the useEffect handle it to avoid double navigation
+      
+      // Wait a bit for auth state to update, then navigate
+      setTimeout(() => {
+        setBusy(false);
+        navigate({ to: (redirect as any) || "/" });
+      }, 100);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid input");
-    } finally {
       setBusy(false);
     }
   };
