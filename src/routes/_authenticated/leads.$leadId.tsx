@@ -134,37 +134,32 @@ function LeadCompletionButtons({ leadId, currentStage }: { leadId: string; curre
   
   const updateLeadStageMutation = useMutation({
     mutationFn: async ({ stage, reason }: { stage: string; reason?: string }) => {
-      const updates: Record<string, unknown> = {
+      const updates: Partial<{
+        stage: string;
+        updated_at: string;
+      }> = {
         stage,
         updated_at: new Date().toISOString(),
       };
       
-      // Set completion timestamps
-      if (stage === "won") {
-        updates.won_at = new Date().toISOString();
-        updates.lost_at = null;
-        updates.lost_reason = null;
-      } else if (stage === "lost") {
-        updates.lost_at = new Date().toISOString();
-        updates.won_at = null;
-        if (reason) updates.lost_reason = reason;
-      }
-      
       const { error } = await supabase
         .from("leads")
-        .update(updates)
+        .update(updates as any)
         .eq("id", leadId);
       
       if (error) throw error;
       
       // Log activity
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("activities").insert({
-        lead_id: leadId,
-        type: "stage_change",
-        description: `Lead marked as ${stage}${reason ? `: ${reason}` : ''}`,
-        user_id: user?.id,
-      });
+      if (user) {
+        await supabase.from("activities").insert({
+          lead_id: leadId,
+          type: "stage_change" as any,
+          description: `Lead marked as ${stage}${reason ? `: ${reason}` : ''}`,
+          user_id: user.id,
+          title: "Stage changed",
+        });
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["lead", leadId] });
@@ -184,22 +179,22 @@ function LeadCompletionButtons({ leadId, currentStage }: { leadId: string; curre
         .from("leads")
         .update({
           stage: "contacted",
-          won_at: null,
-          lost_at: null,
-          lost_reason: null,
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .eq("id", leadId);
       
       if (error) throw error;
       
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("activities").insert({
-        lead_id: leadId,
-        type: "stage_change",
-        description: "Lead reopened",
-        user_id: user?.id,
-      });
+      if (user) {
+        await supabase.from("activities").insert({
+          lead_id: leadId,
+          type: "stage_change" as any,
+          description: "Lead reopened",
+          user_id: user.id,
+          title: "Stage changed",
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lead", leadId] });

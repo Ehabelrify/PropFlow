@@ -108,9 +108,8 @@ export function useRealtime(options: UseRealtimeOptions) {
   };
 
   const handleDelete = (payload: RealtimePostgresChangesPayload<any>) => {
-    const oldRecord = payload.old;
+    const oldRecord = payload.old as { id?: string } | undefined;
 
-    // Remove from cache if we have the ID
     if (oldRecord?.id) {
       queryClient.removeQueries({ queryKey: [table, oldRecord.id] });
     }

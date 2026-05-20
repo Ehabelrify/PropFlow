@@ -12,7 +12,7 @@ import {
 import { useRole } from "@/lib/role-context";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
-import { useProfiles, useCreateLead, useCreateActivity, useCreateTask, useCreateAppointment, useCreateProperty, useUpdateLead, useTenants, useProperties, useBulkAssignLeads, useBulkMoveLeadsStage, useTeams } from "@/hooks/use-supabase";
+import { useProfiles, useCreateLead, useCreateActivity, useCreateTask, useCreateAppointment, useCreateProperty, useUpdateLead, useTenants, useProperties, useBulkAssignLeads, useBulkMoveLeadsStage, useTeams, useCreateInvitation } from "@/hooks/use-supabase";
 import { PIPELINE_STAGES } from "@/lib/constants";
 import { toast } from "sonner";
 import type { LeadSource, LeadStage, TaskPriority, PropertyType, PropertyStatus } from "@/lib/types";
@@ -419,6 +419,7 @@ export function InviteMemberDialog({ trigger }: { trigger: ReactNode }) {
       {
         tenant_id: profile.tenant_id,
         team_id: teamId,
+        role,
         expires_in_hours: 168,
       },
       {

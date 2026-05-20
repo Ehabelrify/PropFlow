@@ -71,12 +71,7 @@ function LoginPage() {
       }
       
       toast.success("Welcome back");
-      
-      // Wait a bit for auth state to update, then navigate
-      setTimeout(() => {
-        setBusy(false);
-        navigate({ to: (redirect as any) || "/" });
-      }, 100);
+      setBusy(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid input");
       setBusy(false);
@@ -172,16 +167,15 @@ function LoginPage() {
         // Rate limit check failed, but continue with the request
       }
 
-      if (rateLimitCheck && !rateLimitCheck.allowed) {
-        const message =
-          typeof rateLimitCheck.message === "string"
-            ? rateLimitCheck.message
-            : "Too many password reset attempts. Please try again later.";
+      const rl = rateLimitCheck as { allowed?: boolean; message?: string; retry_after?: number } | null;
+
+      if (rl && !rl.allowed) {
+        const message = typeof rl.message === "string" ? rl.message : "Too many password reset attempts. Please try again later.";
 
         setRateLimitMessage(message);
 
-        if (typeof rateLimitCheck.retry_after === "number" && rateLimitCheck.retry_after > 0) {
-          startCooldown(rateLimitCheck.retry_after);
+        if (typeof rl.retry_after === "number" && rl.retry_after > 0) {
+          startCooldown(rl.retry_after);
         }
 
         toast.error(message);

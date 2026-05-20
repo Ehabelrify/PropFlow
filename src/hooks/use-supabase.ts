@@ -55,7 +55,6 @@ export function useLeads(filters?: {
       if (error) throw error;
       return (data ?? []) as any[];
     },
-    enabled: !!filters?.tenant_id, // Require tenant_id to prevent unfiltered queries
     staleTime: 30_000,
   });
 }
@@ -961,7 +960,6 @@ export function useProfiles(tenant_id?: string) {
   return useQuery({
     queryKey: ["profiles", tenant_id],
     queryFn: async () => {
-      // Build query with explicit field selection
       let q = db.from("profiles")
         .select("id, name, email, initials, avatar_color, team_id, tenant_id");
       
@@ -971,7 +969,6 @@ export function useProfiles(tenant_id?: string) {
       if (error) throw error;
       if (!profiles) return [];
 
-      // Fetch roles only for these specific profiles
       const profileIds = profiles.map((p: any) => p.id);
       const { data: roles } = await db.from("user_roles")
         .select("user_id, role")
@@ -983,8 +980,7 @@ export function useProfiles(tenant_id?: string) {
 
       return profiles as any[];
     },
-    enabled: !!tenant_id,
-    staleTime: 60_000, // 1 minute - profiles don't change often
+    staleTime: 60_000,
   });
 }
 
@@ -1098,7 +1094,8 @@ export function useCreateInvitation() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tenant_id, team_id, expires_in_hours = 168 }: { tenant_id: string; team_id?: string | null; expires_in_hours?: number }) => {
+    mutationFn: async ({ tenant_id, team_id, role = "agent", expires_in_hours = 168 }:
+      { tenant_id: string; team_id?: string | null; role?: string; expires_in_hours?: number }) => {
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
       const expires_at = new Date(Date.now() + expires_in_hours * 3600000).toISOString();
       const { data, error } = await db.from("invitations").insert({
@@ -1106,6 +1103,7 @@ export function useCreateInvitation() {
         team_id: team_id || null,
         code,
         expires_at,
+        role,
         is_active: true,
         created_by: user!.id,
       }).select().single();
@@ -1113,7 +1111,6 @@ export function useCreateInvitation() {
       return data as any;
     },
     onSuccess: (data) => {
-      // Only invalidate queries for this specific tenant
       qc.invalidateQueries({ queryKey: ["invitations", data.tenant_id] });
     },
   });

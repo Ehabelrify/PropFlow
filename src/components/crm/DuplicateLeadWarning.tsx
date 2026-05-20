@@ -44,9 +44,9 @@ export function DuplicateLeadWarning({
       try {
         const { data, error } = await supabase.rpc("find_duplicate_leads", {
           p_email: email,
-          p_phone: phone || null,
+          p_phone: phone || undefined,
           p_tenant_id: tenantId,
-          p_exclude_lead_id: excludeLeadId || null,
+          p_exclude_lead_id: excludeLeadId || undefined,
         });
 
         if (error) {

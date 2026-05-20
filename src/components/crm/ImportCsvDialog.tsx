@@ -111,9 +111,9 @@ export function ImportCsvDialog({ trigger }: ImportCsvDialogProps) {
 
     setImportProgress({ current: 0, total: sanitizedRows.length, success: 0, failed: 0 });
 
-    const tasks = sanitizedRows.map(row => {
+    const tasks: Array<() => Promise<{ success: boolean }>> = sanitizedRows.map(row => {
       const name = row.name || row["full name"] || row["contact"];
-      if (!name) return async () => ({ skipped: true });
+      if (!name) return async () => ({ success: false });
       return async () => {
         await createLead.mutateAsync({
           name,
@@ -133,8 +133,8 @@ export function ImportCsvDialog({ trigger }: ImportCsvDialogProps) {
 
     const results = await runWithConcurrency(tasks, CONCURRENCY_LIMIT);
 
-    const success = results.filter(r => !("skipped" in (r as any)) && r.success).length;
-    const failed = results.filter(r => !r.success && !("skipped" in (r as any))).length;
+    const success = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
 
     setImportProgress({ current: sanitizedRows.length, total: sanitizedRows.length, success, failed });
 

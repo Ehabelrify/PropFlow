@@ -130,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(newSession);
 
         if (newSession?.user?.id) {
+          setLoading(true);
           // CRITICAL: defer supabase calls out of the auth callback to avoid
           // deadlocking the GoTrue lock (otherwise signIn/signOut hang forever).
           setTimeout(() => {
@@ -157,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
 
       if (data.session?.user?.id) {
+        setLoading(true);
         setTimeout(() => {
           if (mounted) {
             loadProfile(data.session!.user.id, data.session);

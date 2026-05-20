@@ -38,7 +38,7 @@ type Step = "mode" | "company" | "personal" | "plan" | "agent-code" | "success";
 function SignupPage() {
   const navigate = useNavigate();
   const { mode: urlMode } = useSearch({ from: "/signup" });
-  const { isAuthed, loading } = useAuth();
+  const { isAuthed, loading, refresh } = useAuth();
   const [mode, setMode] = useState<Mode>(urlMode === "agent" ? "agent" : "manager");
   const [step, setStep] = useState<Step>(urlMode === "agent" ? "agent-code" : "mode");
   const [companyName, setCompanyName] = useState("");
@@ -53,8 +53,8 @@ function SignupPage() {
   const redeem = useRedeemInvitation();
 
   useEffect(() => {
-    if (!loading && isAuthed) navigate({ to: "/" });
-  }, [isAuthed, loading, navigate]);
+    if (!loading && isAuthed && step !== "success") navigate({ to: "/" });
+  }, [isAuthed, loading, navigate, step]);
 
   useEffect(() => {
     setSlug(companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40));
@@ -96,12 +96,12 @@ function SignupPage() {
     });
 
     if (rpcError) {
-      // Cleanup: sign out the user since workspace creation failed
       await supabase.auth.signOut();
       setBusy(false);
       return toast.error(`Workspace creation failed: ${rpcError.message}`);
     }
 
+    await refresh();
     setBusy(false);
     toast.success("Workspace created! Awaiting super admin approval.");
     setStep("success");
@@ -134,20 +134,19 @@ function SignupPage() {
       return toast.error("Signup failed — please try again");
     }
 
-    redeem.mutate({
-      code: inviteCode.trim().toUpperCase(),
-      userId: authData.user.id
-    }, {
-      onSuccess: () => {
-        toast.success("Account created and joined workspace!");
-        setStep("success");
-        setBusy(false);
-      },
-      onError: (e) => {
-        toast.error(e.message);
-        setBusy(false);
-      },
-    });
+    try {
+      await redeem.mutateAsync({
+        code: inviteCode.trim().toUpperCase(),
+        userId: authData.user.id
+      });
+      await refresh();
+      toast.success("Account created and joined workspace!");
+      setStep("success");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading || isAuthed) {

@@ -14,6 +14,9 @@ const db = supabase as any;
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ context, location }) => {
     const auth = context.auth;
+    
+    if (auth?.loading) return;
+    
     const profile = auth?.profile;
     
     if (!profile) {

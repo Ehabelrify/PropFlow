@@ -220,8 +220,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
   // Enable real-time updates for leads based on user's scope
   useRealtimeLeads({
-    tenantId: profile?.tenant_id,
-    teamId: profile?.team_id,
+    tenantId: profile?.tenant_id ?? undefined,
+    teamId: profile?.team_id ?? undefined,
     enabled: !!profile && isAuthed,
   });
 
