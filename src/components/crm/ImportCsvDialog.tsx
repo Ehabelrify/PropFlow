@@ -3,13 +3,41 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Upload, FileText, AlertCircle } from "lucide-react";
+import { Upload, FileText, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
 import { useCreateLead } from "@/hooks/use-supabase";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
+import { validateCSVData, sanitizeCSVRow } from "@/lib/csv-validation";
 
 interface ImportCsvDialogProps {
   trigger: React.ReactNode;
+}
+
+const CONCURRENCY_LIMIT = 5;
+
+async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number
+): Promise<Array<{ success: boolean; result?: T; error?: Error }>> {
+  const results: Array<{ success: boolean; result?: T; error?: Error }> = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < tasks.length) {
+      const currentIndex = index++;
+      const task = tasks[currentIndex];
+      try {
+        const result = await task();
+        results[currentIndex] = { success: true, result };
+      } catch (error) {
+        results[currentIndex] = { success: false, error: error as Error };
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 export function ImportCsvDialog({ trigger }: ImportCsvDialogProps) {
@@ -17,6 +45,7 @@ export function ImportCsvDialog({ trigger }: ImportCsvDialogProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Array<Record<string, string>>>([]);
   const [parsing, setParsing] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number; success: number; failed: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const createLead = useCreateLead();
   const { profile } = useAuth();
@@ -44,57 +73,106 @@ export function ImportCsvDialog({ trigger }: ImportCsvDialogProps) {
       toast.error("Only CSV files are supported");
       return;
     }
+    if (f.size > 1024 * 1024) {
+      toast.error("File size must be under 1MB");
+      return;
+    }
     setFile(f);
     setParsing(true);
+    setImportProgress(null);
     const text = await f.text();
     const rows = parseCsv(text);
+
+    const validation = validateCSVData(rows as any);
+    if (!validation.valid) {
+      toast.error(`CSV validation failed: ${validation.errors[0]?.error}`);
+      setParsing(false);
+      return;
+    }
+
+    if (rows.length > 500) {
+      toast.error("Max 500 rows per import");
+      setParsing(false);
+      return;
+    }
+
     setPreview(rows.slice(0, 5));
     setParsing(false);
+    if (validation.warnings.length > 0) {
+      toast.warning(`${validation.warnings.length} warnings found — review before importing`);
+    }
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!file) return;
-    file.text().then(text => {
-      const rows = parseCsv(text);
-      let success = 0;
-      let failed = 0;
-      const promises = rows.map(row => {
-        const name = row["name"] || row["full name"] || row["contact"];
-        if (!name) return Promise.resolve(null);
-        return createLead.mutateAsync({
+    const text = await file.text();
+    const rows = parseCsv(text);
+    const sanitizedRows = rows.map(r => sanitizeCSVRow(r as any));
+
+    setImportProgress({ current: 0, total: sanitizedRows.length, success: 0, failed: 0 });
+
+    const tasks = sanitizedRows.map(row => {
+      const name = row.name || row["full name"] || row["contact"];
+      if (!name) return async () => ({ skipped: true });
+      return async () => {
+        await createLead.mutateAsync({
           name,
-          email: row["email"] || null,
-          phone: row["phone"] || null,
-          budget: row["budget"] ? Number(row["budget"]) || 0 : 0,
-          source: (row["source"] as any) || "website",
+          email: row.email || null,
+          phone: row.phone || null,
+          budget: row.budget ? Number(row.budget) || 0 : 0,
+          source: (row.source as any) || "import",
+          stage: (row.stage as any) || "new",
           tenant_id: profile?.tenant_id ?? null,
+          team_id: profile?.team_id ?? null,
           assigned_to: profile?.id ?? null,
-        }).then(() => { success++; }).catch(() => { failed++; });
-      });
-      Promise.all(promises).then(() => {
-        toast.success(`Imported ${success} leads${failed > 0 ? `, ${failed} failed` : ""}`);
+          tags: [],
+        });
+        return { success: true };
+      };
+    });
+
+    const results = await runWithConcurrency(tasks, CONCURRENCY_LIMIT);
+
+    const success = results.filter(r => !("skipped" in (r as any)) && r.success).length;
+    const failed = results.filter(r => !r.success && !("skipped" in (r as any))).length;
+
+    setImportProgress({ current: sanitizedRows.length, total: sanitizedRows.length, success, failed });
+
+    if (failed > 0) {
+      toast.error(`Imported ${success} leads, ${failed} failed`);
+    } else {
+      toast.success(`Successfully imported ${success} leads`);
+    }
+
+    if (failed === 0) {
+      setTimeout(() => {
         setOpen(false);
         setFile(null);
         setPreview([]);
-      });
-    });
+        setImportProgress(null);
+      }, 2000);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { setFile(null); setPreview([]); setImportProgress(null); } setOpen(o); }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Import leads from CSV</DialogTitle>
           <DialogDescription>
-            Upload a CSV with columns: name, email, phone, budget, source.
-            Only <strong>name</strong> is required.
+            Upload a CSV with columns: name, email, phone, budget, source, stage.
+            Only <strong>name</strong> is required. Max 500 rows.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div
             className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center hover:bg-muted/50 cursor-pointer"
             onClick={() => fileRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+            aria-label="Upload CSV file"
           >
             <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
             {file ? (
@@ -138,15 +216,33 @@ export function ImportCsvDialog({ trigger }: ImportCsvDialogProps) {
             </div>
           )}
 
-          {createLead.isPending && (
+          {importProgress && (
+            <div className={`flex items-center gap-2 rounded-md border p-3 text-xs ${
+              importProgress.failed > 0
+                ? "border-warning/30 bg-warning/5 text-warning"
+                : "border-success/30 bg-success/5 text-success"
+            }`}>
+              {importProgress.failed > 0 ? (
+                <XCircle className="h-4 w-4" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              {importProgress.current < importProgress.total
+                ? `Importing... ${importProgress.current}/${importProgress.total}`
+                : `Done: ${importProgress.success} succeeded, ${importProgress.failed} failed`
+              }
+            </div>
+          )}
+
+          {createLead.isPending && !importProgress && (
             <div className="flex items-center gap-2 rounded-md border border-info/30 bg-info/5 p-3 text-xs text-info">
-              <AlertCircle className="h-4 w-4" /> Importing leads...
+              <AlertCircle className="h-4 w-4" /> Preparing import...
             </div>
           )}
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button className="bg-gradient-brand text-primary-foreground" disabled={!file || createLead.isPending} onClick={handleImport}>
+            <Button className="bg-gradient-brand text-primary-foreground" disabled={!file || createLead.isPending || !!importProgress} onClick={handleImport}>
               <Upload className="mr-1.5 h-4 w-4" /> Import
             </Button>
           </div>

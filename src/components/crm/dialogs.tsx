@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/select";
 import { useRole } from "@/lib/role-context";
 import { useAuth } from "@/lib/auth-context";
-import { useProfiles, useCreateLead, useCreateActivity, useCreateTask, useCreateAppointment, useCreateProperty, useUpdateLead, useTenants, useProperties, useBulkAssignLeads, useBulkMoveLeadsStage } from "@/hooks/use-supabase";
+import { supabase } from "@/integrations/supabase/client";
+import { useProfiles, useCreateLead, useCreateActivity, useCreateTask, useCreateAppointment, useCreateProperty, useUpdateLead, useTenants, useProperties, useBulkAssignLeads, useBulkMoveLeadsStage, useTeams } from "@/hooks/use-supabase";
 import { PIPELINE_STAGES } from "@/lib/constants";
 import { toast } from "sonner";
 import type { LeadSource, LeadStage, TaskPriority, PropertyType, PropertyStatus } from "@/lib/types";
@@ -402,16 +403,36 @@ export function NewPropertyDialog({ trigger }: { trigger: ReactNode }) {
 
 export function InviteMemberDialog({ trigger }: { trigger: ReactNode }) {
   const { profile } = useAuth();
+  const createInvitation = useCreateInvitation();
+  const { data: teams = [] } = useTeams(profile?.tenant_id ?? undefined);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"agent" | "manager">("agent");
+  const [teamId, setTeamId] = useState<string | null>(null);
 
   const submit = () => {
     if (!name || !email) return toast.error("Name and email required");
-    toast.success(`Invitation sent to ${email} — user will be created on signup`);
-    setOpen(false);
-    setName(""); setEmail("");
+    if (!profile?.tenant_id) return toast.error("No workspace selected");
+
+    createInvitation.mutate(
+      {
+        tenant_id: profile.tenant_id,
+        team_id: teamId,
+        expires_in_hours: 168,
+      },
+      {
+        onSuccess: (invitation) => {
+          toast.success(`Invitation code generated: ${invitation.code}. Share with ${email}`);
+          setOpen(false);
+          setName("");
+          setEmail("");
+        },
+        onError: (error: any) => {
+          toast.error(error.message || "Failed to create invitation");
+        },
+      }
+    );
   };
 
   return (
@@ -420,7 +441,7 @@ export function InviteMemberDialog({ trigger }: { trigger: ReactNode }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Invite team member</DialogTitle>
-          <DialogDescription>They'll receive an email to join your workspace.</DialogDescription>
+          <DialogDescription>Generate an invitation code to share with your team.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div><Label className="text-xs">Full name</Label><Input value={name} onChange={e => setName(e.target.value)} className="mt-1" /></div>
@@ -435,10 +456,22 @@ export function InviteMemberDialog({ trigger }: { trigger: ReactNode }) {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label className="text-xs">Team (optional)</Label>
+            <Select value={teamId ?? ""} onValueChange={v => setTeamId(v || null)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="No team" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">No team</SelectItem>
+                {teams.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={submit} className="bg-gradient-brand text-primary-foreground">Send invite</Button>
+          <Button onClick={submit} disabled={createInvitation.isPending} className="bg-gradient-brand text-primary-foreground">
+            {createInvitation.isPending ? "Generating..." : "Generate invite code"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -452,12 +485,45 @@ export function ProvisionTenantDialog({ trigger }: { trigger: ReactNode }) {
   const [slug, setSlug] = useState("");
   const [plan, setPlan] = useState<"starter" | "professional" | "enterprise">("professional");
   const [seats, setSeats] = useState("25");
+  const [busy, setBusy] = useState(false);
 
-  const submit = () => {
+  const PLAN_SEATS: Record<string, number> = { starter: 5, professional: 25, enterprise: 100 };
+
+  const submit = async () => {
     if (!name.trim()) return toast.error("Name required");
-    toast.success(`Tenant "${name}" provisioned`);
-    setOpen(false);
-    setName(""); setSlug("");
+
+    const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+
+    setBusy(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setBusy(false);
+        return toast.error("Not authenticated");
+      }
+
+      const { error } = await (supabase as any).rpc("complete_manager_signup", {
+        _user_id: user.id,
+        _tenant_name: name.trim(),
+        _tenant_slug: finalSlug,
+        _plan: plan,
+        _seats: parseInt(seats, 10) || PLAN_SEATS[plan] || 25,
+      });
+
+      setBusy(false);
+
+      if (error) {
+        return toast.error(error.message);
+      }
+
+      toast.success(`Tenant "${name}" provisioned successfully`);
+      setOpen(false);
+      setName("");
+      setSlug("");
+    } catch (e: any) {
+      setBusy(false);
+      toast.error(e.message || "Failed to provision tenant");
+    }
   };
 
   return (
@@ -488,7 +554,9 @@ export function ProvisionTenantDialog({ trigger }: { trigger: ReactNode }) {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={submit} className="bg-gradient-brand text-primary-foreground">Provision</Button>
+          <Button onClick={submit} disabled={busy} className="bg-gradient-brand text-primary-foreground">
+            {busy ? "Provisioning..." : "Provision"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

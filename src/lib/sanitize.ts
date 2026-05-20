@@ -158,10 +158,8 @@ export function sanitizeFileName(fileName: string): string {
 export function sanitizeSearchQuery(query: string): string {
   if (!query) return '';
   
-  // Remove SQL injection attempts
   let sanitized = query.trim();
   
-  // Remove common SQL keywords and special characters
   const sqlPatterns = [
     /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE|UNION|DECLARE)\b)/gi,
     /[;'"\\]/g,
@@ -170,11 +168,17 @@ export function sanitizeSearchQuery(query: string): string {
     /\*\//g,
   ];
   
-  sqlPatterns.forEach(pattern => {
-    sanitized = sanitized.replace(pattern, '');
-  });
+  // Iteratively remove SQL patterns until no more matches are found
+  // This handles nested attempts like "SESELECTLECT" → "SELECT" → ""
+  let previous;
+  do {
+    previous = sanitized;
+    sqlPatterns.forEach(pattern => {
+      sanitized = sanitized.replace(pattern, '');
+    });
+    sanitized = sanitized.trim();
+  } while (sanitized !== previous);
   
-  // Limit length
   return sanitized.substring(0, 200);
 }
 

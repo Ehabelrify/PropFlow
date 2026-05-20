@@ -48,7 +48,7 @@ const VALID_STAGES = ["new", "contacted", "qualified", "viewing", "negotiation",
  * Validate email format
  */
 function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
   return emailRegex.test(email);
 }
 
@@ -59,8 +59,8 @@ function isValidPhone(phone: string): boolean {
   // Remove common separators
   const cleaned = phone.replace(/[\s\-\(\)\.]/g, "");
   
-  // Check if it's a valid phone number (8-15 digits, optionally starting with +)
-  const phoneRegex = /^\+?[1-9]\d{7,14}$/;
+  // Check if it's a valid phone number (7-15 digits, optionally starting with +)
+  const phoneRegex = /^\+?[0-9]{7,15}$/;
   return phoneRegex.test(cleaned);
 }
 
@@ -252,10 +252,11 @@ export function validateCSVData(
     };
   }
 
-  // Check for required columns
+  // Check for required columns (case-insensitive)
   const firstRow = data[0];
+  const firstRowKeys = Object.keys(firstRow).map(k => k.toLowerCase().trim());
   const missingColumns = REQUIRED_FIELDS.filter(
-    field => !(field in firstRow)
+    field => !firstRowKeys.includes(field.toLowerCase())
   );
 
   if (missingColumns.length > 0) {

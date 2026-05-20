@@ -56,6 +56,21 @@ function PropertiesPage() {
           </Card>
         ))}
       </div>
+
+      {(properties as any[]).length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Building2 className="mb-4 h-12 w-12 text-muted-foreground/50" />
+          <h3 className="text-lg font-semibold">No properties yet</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Add your first property listing to start matching leads.</p>
+          <NewPropertyDialog
+            trigger={
+              <Button size="sm" className="mt-4 bg-gradient-brand text-primary-foreground">
+                <Plus className="mr-1.5 h-4 w-4" /> Add first property
+              </Button>
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }

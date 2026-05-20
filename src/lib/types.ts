@@ -19,7 +19,6 @@ export interface Tenant {
   status: "active" | "suspended" | "trial";
   createdAt: string;
   seats: number;
-  leadsCount: number;
 }
 
 export interface Team {

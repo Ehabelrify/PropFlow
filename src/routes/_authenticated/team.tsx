@@ -22,6 +22,44 @@ import { ORG_ROLE_LABEL } from "@/lib/role-context";
 import { useLeads, useProfiles, useTeams, useTenants, useTenant, useInvitations, useCreateInvitation, useRevokeInvitation, useUpdateUserRole, useAssignTeam, useCreateTeam } from "@/hooks/use-supabase";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import type { Team, OrgRole } from "@/lib/types";
+
+type ProfileRow = {
+  id: string;
+  name: string;
+  email: string;
+  initials: string;
+  avatar_color: string;
+  team_id: string | null;
+  tenant_id: string | null;
+  created_at: string;
+  updated_at: string;
+  user_roles?: Array<{ role: OrgRole }>;
+};
+
+type TeamWithLeader = Team & {
+  leader?: { id: string; name: string; initials: string; avatar_color: string } | null;
+  tenant?: { name: string } | null;
+};
+
+type InvitationRow = {
+  id: string;
+  code: string;
+  tenant_id: string;
+  team_id: string | null;
+  is_active: boolean;
+  expires_at: string;
+  used_by: string | null;
+  used_at: string | null;
+};
+
+type LeadRow = {
+  id: string;
+  assigned_to?: string | null;
+  owner_id?: string | null;
+  stage: string;
+  budget?: number;
+};
 
 const NO_TEAM_VALUE = "__none__";
 
@@ -72,21 +110,21 @@ function TeamPage() {
   const [inviteTeamId, setInviteTeamId] = useState<string>(isLeader && profile?.team_id ? profile.team_id : NO_TEAM_VALUE);
   const [teamDialog, setTeamDialog] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
-  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editingUser, setEditingUser] = useState<ProfileRow | null>(null);
   const [editRole, setEditRole] = useState<string>("");
   const [editTeam, setEditTeam] = useState<string>(NO_TEAM_VALUE);
   const [processing, setProcessing] = useState(false);
 
   const usedSeats = isManager ? profiles.length : 0;
-  const totalSeats = (currentTenant as any)?.seats ?? 5;
+  const totalSeats = (currentTenant as { seats?: number })?.seats ?? 5;
   const atCapacity = usedSeats >= totalSeats;
 
-  const teamMap = new Map((teams as any[]).map((t: any) => [t.id, t]));
+  const teamMap = new Map((teams as TeamWithLeader[]).map((t) => [t.id, t]));
 
   // Precompute lead stats once - O(leads) instead of O(users × leads)
   const leadsByOwner = useMemo(() => {
-    const map = new Map<string, any[]>();
-    (leads ?? []).forEach((lead: any) => {
+    const map = new Map<string, LeadRow[]>();
+    (leads ?? []).forEach((lead: LeadRow) => {
       const ownerId = lead.assigned_to || lead.owner_id;
       if (ownerId) {
         if (!map.has(ownerId)) map.set(ownerId, []);
@@ -99,8 +137,8 @@ function TeamPage() {
   const userStats = useMemo(() => {
     const stats = new Map<string, { total: number; won: number; wonValue: number }>();
     leadsByOwner.forEach((userLeads, userId) => {
-      const wonLeads = userLeads.filter((l: any) => l.stage === "won");
-      const wonValue = wonLeads.reduce((sum: number, l: any) => sum + (l.budget || 0), 0);
+      const wonLeads = userLeads.filter((l) => l.stage === "won");
+      const wonValue = wonLeads.reduce((sum, l) => sum + (l.budget || 0), 0);
       stats.set(userId, {
         total: userLeads.length,
         won: wonLeads.length,
@@ -112,8 +150,8 @@ function TeamPage() {
 
   // Group profiles by team
   const profilesByTeam = useMemo(() => {
-    const grouped: Record<string, any[]> = { unassigned: [] };
-    (profiles as any[]).forEach((u: any) => {
+    const grouped: Record<string, ProfileRow[]> = { unassigned: [] };
+    (profiles as ProfileRow[]).forEach((u) => {
       const tid = u.team_id;
       if (tid && teamMap.has(tid)) {
         if (!grouped[tid]) grouped[tid] = [];
@@ -147,7 +185,7 @@ function TeamPage() {
         toast.success("Invitation code created");
         setInviteTeamId(isLeader && profile?.team_id ? profile.team_id : NO_TEAM_VALUE);
       },
-      onError: (error: any) => {
+      onError: (error: Error) => {
         toast.error(`Failed to create invitation: ${error.message || "Unknown error"}`);
       },
     });
@@ -163,7 +201,7 @@ function TeamPage() {
   const handleSaveUser = () => {
     if (!editingUser) return;
     setProcessing(true);
-    const promises: Promise<any>[] = [];
+    const promises: Promise<void>[] = [];
     if (editRole && editRole !== editingUser.user_roles?.[0]?.role) {
       promises.push(new Promise<void>((resolve) => {
         updateRole.mutate({ userId: editingUser.id, role: editRole as any }, { onSettled: () => resolve() });
@@ -203,7 +241,7 @@ function TeamPage() {
         setTeamDialog(false);
         setNewTeamName("");
       },
-      onError: (error: any) => {
+      onError: (error: Error) => {
         toast.error(`Failed to create team: ${error.message || "Unknown error"}`);
       },
     });
@@ -219,8 +257,8 @@ function TeamPage() {
     setInviteDialog(true);
   };
 
-  const renderAgentCard = (u: any) => {
-    const role = (u.user_roles?.[0]?.role ?? "agent") as "super_admin" | "manager" | "leader" | "agent";
+  const renderAgentCard = (u: ProfileRow) => {
+    const role = (u.user_roles?.[0]?.role ?? "agent") as OrgRole;
     // Use precomputed stats instead of filtering leads
     const stats = userStats.get(u.id) || { total: 0, won: 0, wonValue: 0 };
 
@@ -330,7 +368,7 @@ function TeamPage() {
 
       {/* Teams and Agents */}
       <div className="flex flex-col gap-6 p-6">
-        {(teams as any[]).length === 0 ? (
+        {(teams as TeamWithLeader[]).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Building2 className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <h3 className="text-lg font-semibold">No teams yet</h3>
@@ -346,7 +384,7 @@ function TeamPage() {
             )}
           </div>
         ) : (
-          (teams as any[]).map((team: any) => {
+          (teams as TeamWithLeader[]).map((team) => {
             const teamProfiles = profilesByTeam[team.id] || [];
             const tenantName = team.tenant?.name;
             const displayName = isSuperAdmin && tenantName
@@ -448,7 +486,7 @@ function TeamPage() {
                   <SelectTrigger className="mt-1"><SelectValue placeholder="No team" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NO_TEAM_VALUE}>No team</SelectItem>
-                    {(teams as any[]).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    {(teams as TeamWithLeader[]).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -496,7 +534,7 @@ function TeamPage() {
               <Label className="text-xs">Team (optional)</Label>
               {isLeader ? (
                 <div className="mt-1 rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                  {(teams as any[]).find((t: any) => t.id === profile?.team_id)?.name || "Your team"}
+                  {(teams as TeamWithLeader[]).find((t) => t.id === profile?.team_id)?.name || "Your team"}
                   <p className="mt-1 text-[11px] text-muted-foreground">Agents will be assigned to your team</p>
                 </div>
               ) : (
@@ -506,7 +544,7 @@ function TeamPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NO_TEAM_VALUE}>No team (tenant-wide)</SelectItem>
-                    {(teams as any[]).map((t: any) => (
+                    {(teams as TeamWithLeader[]).map((t) => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -520,13 +558,13 @@ function TeamPage() {
                 </p>
               )}
             </div>
-            {(invitations as any[]).map((inv: any) => (
+            {(invitations as InvitationRow[]).map((inv) => (
               <div key={inv.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
                 <div>
                   <p className="font-mono text-sm font-semibold">{inv.code}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {inv.is_active ? `Expires ${formatDistanceToNow(new Date(inv.expires_at), { addSuffix: true })}` : "Revoked"}
-                    {inv.team_id && ` · ${(teams as any[]).find((t: any) => t.id === inv.team_id)?.name || 'Unknown team'}`}
+                    {inv.team_id && ` · ${(teams as TeamWithLeader[]).find((t) => t.id === inv.team_id)?.name || 'Unknown team'}`}
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -544,7 +582,7 @@ function TeamPage() {
                 </div>
               </div>
             ))}
-            {(invitations as any[]).length === 0 && (
+            {(invitations as InvitationRow[]).length === 0 && (
               <p className="py-4 text-center text-sm text-muted-foreground">No invitation codes yet.</p>
             )}
           </div>

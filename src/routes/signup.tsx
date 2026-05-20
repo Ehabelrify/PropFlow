@@ -95,12 +95,14 @@ function SignupPage() {
       _seats: PLANS.find(p => p.id === plan)?.seats ?? 5,
     });
 
-    setBusy(false);
-
     if (rpcError) {
-      return toast.error(rpcError.message);
+      // Cleanup: sign out the user since workspace creation failed
+      await supabase.auth.signOut();
+      setBusy(false);
+      return toast.error(`Workspace creation failed: ${rpcError.message}`);
     }
 
+    setBusy(false);
     toast.success("Workspace created! Awaiting super admin approval.");
     setStep("success");
   };

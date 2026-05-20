@@ -1036,18 +1036,31 @@ export function useUpdateProfile() {
 
 // ========= DASHBOARD STATS =========
 export function useDashboardStats() {
-  const { profile } = useAuth();
+  const { profile, roles } = useAuth();
   return useQuery({
-    queryKey: ["dashboard-stats", profile?.tenant_id],
+    queryKey: ["dashboard-stats", profile?.tenant_id, roles],
     queryFn: async () => {
+      const isSuperAdmin = roles.includes("super_admin");
       const tenantId = profile?.tenant_id;
-      const q = (tenantId ? db.from("leads") : db.from("leads"));
+
+      const leadsQuery = isSuperAdmin
+        ? db.from("leads").select("id, budget, stage", { count: "exact" })
+        : db.from("leads").select("id, budget, stage", { count: "exact" }).eq("tenant_id", tenantId);
+
+      const wonQuery = isSuperAdmin
+        ? db.from("leads").select("budget").eq("stage", "won")
+        : db.from("leads").select("budget").eq("stage", "won").eq("tenant_id", tenantId);
+
+      const pipelineQuery = isSuperAdmin
+        ? db.from("leads").select("stage")
+        : db.from("leads").select("stage").eq("tenant_id", tenantId);
+
       const [leadsRes, wonRes, tasksRes, apptsRes, pipelineRes] = await Promise.all([
-        db.from("leads").select("id, budget", { count: "exact" }).eq("tenant_id", tenantId || ""),
-        db.from("leads").select("budget").eq("stage", "won").eq("tenant_id", tenantId || ""),
+        leadsQuery,
+        wonQuery,
         db.from("tasks").select("id", { count: "exact" }).eq("status", "open"),
         db.from("appointments").select("id", { count: "exact" }).eq("status", "scheduled"),
-        db.from("leads").select("stage").eq("tenant_id", tenantId || ""),
+        pipelineQuery,
       ]);
       if (leadsRes.error) throw leadsRes.error;
       return {
@@ -1062,6 +1075,7 @@ export function useDashboardStats() {
         ),
       };
     },
+    enabled: !!profile,
   });
 }
 
@@ -1211,13 +1225,13 @@ export function useUpdateUserRole() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: "agent" | "leader" | "manager" }) => {
-      await db.from("user_roles").delete().eq("user_id", userId);
-      const { error } = await db.from("user_roles").insert({ user_id: userId, role });
+      const { error } = await db
+        .from("user_roles")
+        .upsert({ user_id: userId, role }, { onConflict: "user_id" });
       if (error) throw error;
       return { userId, role };
     },
     onSuccess: () => {
-      // Only invalidate queries for the current tenant
       if (profile?.tenant_id) {
         qc.invalidateQueries({ queryKey: ["profiles", profile.tenant_id] });
         qc.invalidateQueries({ queryKey: ["teams", profile.tenant_id] });

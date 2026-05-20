@@ -9,7 +9,7 @@ import {
 import { useRole, ORG_ROLE_LABEL } from "@/lib/role-context";
 import type { Permission } from "@/lib/role-context";
 
-type NavItem = { title: string; url: string; icon: any; exact?: boolean; perm?: Permission };
+type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; exact?: boolean; perm?: Permission };
 
 const main: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },

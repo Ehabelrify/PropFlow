@@ -28,7 +28,7 @@ export const Route = createFileRoute("/_authenticated")({
       throw redirect({ to: "/suspended" });
     }
     
-    if (profile.tenant_status === "pending" || profile.tenant_status === "rejected") {
+    if (profile.tenant_status === "pending_approval" || profile.tenant_status === "rejected") {
       // Allow through - will be handled by component
     }
     

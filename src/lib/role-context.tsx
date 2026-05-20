@@ -170,7 +170,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         *,
         tenant:tenants(id, name, status),
         team:teams(id, name),
-        assigned_user:users!assigned_to(id, full_name, email, avatar_url)
+        assigned_user:profiles!assigned_to(id, full_name, email, avatar_url)
       `);
       
       // Use authRoles directly instead of orgRoleOf to ensure correct role detection

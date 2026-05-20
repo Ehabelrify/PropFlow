@@ -57,13 +57,11 @@ function LoginPage() {
     setBusy(true);
     
     try {
-      // Sanitize inputs
       const sanitizedEmail = sanitizeEmail(email);
-      const sanitizedPassword = sanitizeText(password, 100);
       
       const { error } = await supabase.auth.signInWithPassword({
         email: sanitizedEmail,
-        password: sanitizedPassword
+        password
       });
       
       if (error) {
@@ -90,14 +88,12 @@ function LoginPage() {
     setBusy(true);
     
     try {
-      // Sanitize inputs
       const sanitizedEmail = sanitizeEmail(email);
-      const sanitizedPassword = sanitizeText(password, 100);
       const sanitizedName = sanitizeText(name, 100);
       
       const { error } = await supabase.auth.signUp({
         email: sanitizedEmail,
-        password: sanitizedPassword,
+        password,
         options: {
           data: { name: sanitizedName },
           emailRedirectTo: `${window.location.origin}/`

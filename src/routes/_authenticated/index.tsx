@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/")({
 
 function KpiCard({
   label, value, delta, deltaPositive = true, icon: Icon, accent,
-}: { label: string; value: string; delta?: string; deltaPositive?: boolean; icon: any; accent: string }) {
+}: { label: string; value: string; delta?: string; deltaPositive?: boolean; icon: React.ComponentType<{ className?: string }>; accent: string }) {
   return (
     <Card className="relative overflow-hidden p-5 shadow-card">
       <div className="flex items-start justify-between gap-3">
@@ -126,7 +126,10 @@ function Dashboard() {
     [activities, orgRole, leadIds]
   );
   
-  const getLead = (id: string) => leads.find(l => l.id === id);
+  const getLead = useMemo(() => {
+    const leadMap = new Map(leads.map(l => [l.id, l]));
+    return (id: string) => leadMap.get(id);
+  }, [leads]);
 
   const byStage = stats?.byStage ?? {};
   const stageBreakdown = useMemo(() =>
@@ -139,8 +142,46 @@ function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="text-sm text-muted-foreground">Loading dashboard...</div>
+      <div>
+        <div className="border-b bg-gradient-subtle px-6 py-5">
+          <div className="h-7 w-48 animate-pulse rounded-md bg-muted" />
+          <div className="mt-2 h-4 w-64 animate-pulse rounded-md bg-muted/60" />
+        </div>
+        <div className="space-y-6 p-6">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="relative overflow-hidden p-5 shadow-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-2">
+                    <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+                    <div className="h-7 w-24 animate-pulse rounded bg-muted" />
+                  </div>
+                  <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
+                </div>
+              </Card>
+            ))}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="p-5 shadow-card lg:col-span-2">
+              <div className="h-56 flex items-center justify-center">
+                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+              </div>
+            </Card>
+            <Card className="p-5 shadow-card">
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i}>
+                    <div className="mb-1 flex justify-between">
+                      <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+                      <div className="h-3 w-6 animate-pulse rounded bg-muted" />
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -273,7 +314,7 @@ function Dashboard() {
                     </div>
                   </li>
                 ))}
-                {overdueTasks.length === 0 && <li className="text-xs text-muted-foreground">All caught up 🎉</li>}
+                {overdueTasks.length === 0 && <li className="text-xs text-muted-foreground">All caught up</li>}
               </ul>
             </Card>
           </div>

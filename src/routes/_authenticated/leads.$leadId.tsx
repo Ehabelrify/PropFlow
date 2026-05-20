@@ -29,15 +29,61 @@ import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+import type { Activity, Task, Appointment, LeadStage } from "@/lib/types";
+
 type TimelineFilter = "all" | "calls" | "emails" | "notes" | "tasks" | "appointments" | "stages";
+
+type ActivityWithUser = {
+  id: string;
+  lead_id: string;
+  type: string;
+  title: string;
+  description?: string | null;
+  created_at: string;
+  user?: { name: string } | null;
+};
+
+type TaskWithUser = {
+  id: string;
+  title: string;
+  description?: string | null;
+  lead_id?: string | null;
+  assigned_to: string;
+  priority: string;
+  status: string;
+  due_at: string;
+  created_at: string;
+  assigned_user?: { name: string } | null;
+};
+
+type AppointmentWithUser = {
+  id: string;
+  title: string;
+  lead_id: string;
+  property_id?: string | null;
+  assigned_to: string;
+  status: string;
+  scheduled_at: string;
+  duration_min: number;
+  location?: string | null;
+  notes?: string | null;
+  assigned_user?: { name: string } | null;
+};
 
 type TimelineEntry = {
   id: string;
   kind: "activity" | "task" | "appointment";
   sortDate: string;
-  activity?: any;
-  task?: any;
-  appointment?: any;
+  activity?: ActivityWithUser;
+  task?: TaskWithUser;
+  appointment?: AppointmentWithUser;
+};
+
+type Requirements = {
+  bedrooms?: number;
+  bathrooms?: number;
+  area?: number;
+  location?: string;
 };
 
 const FILTERS: { key: TimelineFilter; label: string }[] = [
@@ -88,7 +134,7 @@ function LeadCompletionButtons({ leadId, currentStage }: { leadId: string; curre
   
   const updateLeadStageMutation = useMutation({
     mutationFn: async ({ stage, reason }: { stage: string; reason?: string }) => {
-      const updates: any = {
+      const updates: Record<string, unknown> = {
         stage,
         updated_at: new Date().toISOString(),
       };
@@ -117,7 +163,7 @@ function LeadCompletionButtons({ leadId, currentStage }: { leadId: string; curre
         lead_id: leadId,
         type: "stage_change",
         description: `Lead marked as ${stage}${reason ? `: ${reason}` : ''}`,
-        created_by: user?.id,
+        user_id: user?.id,
       });
     },
     onSuccess: (_, variables) => {
@@ -152,7 +198,7 @@ function LeadCompletionButtons({ leadId, currentStage }: { leadId: string; curre
         lead_id: leadId,
         type: "stage_change",
         description: "Lead reopened",
-        created_by: user?.id,
+        user_id: user?.id,
       });
     },
     onSuccess: () => {
@@ -317,7 +363,7 @@ function LeadDetail() {
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const [noteText, setNoteText] = useState("");
   const [newTag, setNewTag] = useState("");
-  const [reqEdits, setReqEdits] = useState(lead?.requirements || {});
+  const [reqEdits, setReqEdits] = useState<Requirements>(lead?.requirements || {});
   const [reqDialogOpen, setReqDialogOpen] = useState(false);
 
   // Memoized timeline - MUST be before any conditional returns
@@ -344,7 +390,7 @@ function LeadDetail() {
   if (isLoading) return <div className="p-12 text-center text-sm text-muted-foreground">Loading lead...</div>;
   if (!lead) return <div className="p-12 text-center text-sm text-muted-foreground">Lead not found.</div>;
 
-  const owner = (profiles || []).find((p: any) => p.id === lead.assigned_to);
+  const owner = (profiles || []).find((p) => p.id === lead.assigned_to);
   const property = (properties || []).find(p => p.id === lead.property_interest);
 
   const submitNote = () => {
@@ -395,12 +441,12 @@ function LeadDetail() {
   const handleTaskToggle = (taskId: string, currentStatus: string) => {
     const newStatus = currentStatus === "done" ? "open" : "done";
     updateTask.mutate(
-      { id: taskId, status: newStatus as any },
+      { id: taskId, status: newStatus },
       {
         onSuccess: () => {
           toast.success(newStatus === "done" ? "Task completed" : "Task reopened");
         },
-        onError: (error: any) => {
+        onError: (error: Error) => {
           toast.error("Failed to update task");
           console.error("Task update error:", error);
         },
@@ -453,14 +499,14 @@ function LeadDetail() {
                 const reached = i <= currentIdx;
                 return (
                   <div key={s.id} className="flex items-center">
-                    <button onClick={() => updateLead.mutate({ id: leadId, stage: s.id as any })} className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition ${reached ? `border-primary bg-primary text-primary-foreground` : `border-border bg-muted/40 text-muted-foreground hover:bg-muted`}`}>
+                    <button onClick={() => updateLead.mutate({ id: leadId, stage: s.id as LeadStage })} className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition ${reached ? `border-primary bg-primary text-primary-foreground` : `border-border bg-muted/40 text-muted-foreground hover:bg-muted`}`}>
                       {s.label}
                     </button>
                     {i < arr.length - 1 && <div className={`mx-0.5 h-px w-3 ${reached && i < currentIdx ? `bg-primary` : `bg-border`}`} />}
                   </div>
                 );
               })}
-              <button onClick={() => updateLead.mutate({ id: leadId, stage: "lost" as any })} className={`ml-2 rounded-full border px-2.5 py-1 text-xs font-medium transition ${lead.stage === "lost" ? "border-destructive bg-destructive text-destructive-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}>
+              <button onClick={() => updateLead.mutate({ id: leadId, stage: "lost" as LeadStage })} className={`ml-2 rounded-full border px-2.5 py-1 text-xs font-medium transition ${lead.stage === "lost" ? "border-destructive bg-destructive text-destructive-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}>
                 Lost
               </button>
             </div>
@@ -484,8 +530,11 @@ function LeadDetail() {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <Textarea value={noteText} onChange={e => setNoteText(e.target.value)} onKeyDown={handleNoteKeyDown} placeholder="Add a quick note..." rows={2} className="min-h-[60px] resize-none text-sm" />
-              <Button size="icon" onClick={submitNote} disabled={!noteText.trim()} className="h-[60px] w-10 shrink-0 bg-gradient-brand text-primary-foreground disabled:opacity-40">
+              <div className="relative flex-1">
+                <Textarea value={noteText} onChange={e => setNoteText(e.target.value)} onKeyDown={handleNoteKeyDown} placeholder="Add a quick note..." rows={2} className="min-h-[60px] resize-none text-sm pr-16" />
+                <span className="pointer-events-none absolute right-2 bottom-2 text-[10px] text-muted-foreground">⌘+Enter</span>
+              </div>
+              <Button size="icon" onClick={submitNote} disabled={!noteText.trim()} className="h-[60px] w-10 shrink-0 bg-gradient-brand text-primary-foreground disabled:opacity-40" aria-label="Send note">
                 <Send className="h-4 w-4" />
               </Button>
             </div>
@@ -515,7 +564,7 @@ function LeadDetail() {
                       <>
                         <p className="text-sm">
                           <span className="font-medium">{entry.activity.title}</span>{" "}
-                          <span className="text-muted-foreground">by {(entry.activity as any).user?.name ?? "Unknown"}</span>
+                          <span className="text-muted-foreground">by {entry.activity?.user?.name ?? "Unknown"}</span>
                         </p>
                         {entry.activity.description && (
                           <p className="mt-1 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{entry.activity.description}</p>
@@ -535,11 +584,11 @@ function LeadDetail() {
                           <span>·</span>
                           <span>Due {format(new Date(entry.task.due_at), "MMM d")}</span>
                           <span>·</span>
-                          <span>{(entry.task as any).assigned_user?.name ?? "Unknown"}</span>
+                          <span>{entry.task?.assigned_user?.name ?? "Unknown"}</span>
                         </div>
-                        {entry.task.status !== "done" && (
+                        {entry.task && entry.task.status !== "done" && (
                           <button
-                            onClick={() => handleTaskToggle(entry.task.id, entry.task.status)}
+                            onClick={() => entry.task && handleTaskToggle(entry.task.id, entry.task.status)}
                             disabled={updateTask.isPending}
                             className="mt-1.5 text-[11px] font-medium text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                           >
@@ -584,7 +633,7 @@ function LeadDetail() {
           <Card className="p-5 shadow-card">
             <h3 className="text-sm font-semibold">Details</h3>
             <dl className="mt-3 space-y-2.5 text-sm">
-              <div className="flex justify-between"><dt className="text-muted-foreground">Stage</dt><dd><StageBadge stage={lead.stage as any} /></dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Stage</dt><dd><StageBadge stage={lead.stage as LeadStage} /></dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Score</dt><dd className="font-medium tabular-nums">{lead.score}/100</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Budget</dt><dd className="font-medium tabular-nums">{formatCurrency(Number(lead.budget))}</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Source</dt><dd className="capitalize">{lead.source}</dd></div>
@@ -648,19 +697,19 @@ function LeadDetail() {
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="bedrooms" className="text-right text-xs">Bedrooms</Label>
-                      <Input id="bedrooms" type="number" value={(reqEdits as any).bedrooms || ""} onChange={e => setReqEdits({...reqEdits, bedrooms: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
+                      <Input id="bedrooms" type="number" value={reqEdits.bedrooms ?? ""} onChange={e => setReqEdits({...reqEdits, bedrooms: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="bathrooms" className="text-right text-xs">Bathrooms</Label>
-                      <Input id="bathrooms" type="number" value={(reqEdits as any).bathrooms || ""} onChange={e => setReqEdits({...reqEdits, bathrooms: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
+                      <Input id="bathrooms" type="number" value={reqEdits.bathrooms ?? ""} onChange={e => setReqEdits({...reqEdits, bathrooms: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="area" className="text-right text-xs">Area (sqm)</Label>
-                      <Input id="area" type="number" value={(reqEdits as any).area || ""} onChange={e => setReqEdits({...reqEdits, area: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
+                      <Input id="area" type="number" value={reqEdits.area ?? ""} onChange={e => setReqEdits({...reqEdits, area: parseInt(e.target.value) || undefined})} className="col-span-3 h-8" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="location" className="text-right text-xs">Location</Label>
-                      <Input id="location" value={(reqEdits as any).location || ""} onChange={e => setReqEdits({...reqEdits, location: e.target.value})} className="col-span-3 h-8" />
+                      <Input id="location" value={reqEdits.location ?? ""} onChange={e => setReqEdits({...reqEdits, location: e.target.value})} className="col-span-3 h-8" />
                     </div>
                   </div>
                   <div className="flex justify-end">
@@ -670,10 +719,10 @@ function LeadDetail() {
               </Dialog>
             </div>
             <dl className="mt-3 space-y-2.5 text-sm">
-              <div className="flex justify-between"><dt className="text-muted-foreground">Bedrooms</dt><dd className="font-medium">{(lead.requirements as any)?.bedrooms || "-"}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted-foreground">Bathrooms</dt><dd className="font-medium">{(lead.requirements as any)?.bathrooms || "-"}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted-foreground">Area</dt><dd className="font-medium">{(lead.requirements as any)?.area ? `${(lead.requirements as any).area} sqm` : "-"}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted-foreground">Location</dt><dd className="font-medium capitalize">{(lead.requirements as any)?.location || "-"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Bedrooms</dt><dd className="font-medium">{lead.requirements?.bedrooms || "-"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Bathrooms</dt><dd className="font-medium">{lead.requirements?.bathrooms || "-"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Area</dt><dd className="font-medium">{lead.requirements?.area ? `${lead.requirements.area} sqm` : "-"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Location</dt><dd className="font-medium capitalize">{lead.requirements?.location || "-"}</dd></div>
             </dl>
           </Card>
 
@@ -738,8 +787,8 @@ function LeadDetail() {
               <NewTaskDialog leadId={leadId} trigger={<Button size="icon" variant="ghost" className="h-7 w-7"><Plus className="h-3.5 w-3.5" /></Button>} />
             </div>
             <ul className="mt-2 space-y-2">
-              {(tasks as any[]).length === 0 && <p className="text-xs text-muted-foreground">No tasks yet</p>}
-              {(tasks as any[]).map(t => (
+              {(tasks as TaskWithUser[]).length === 0 && <p className="text-xs text-muted-foreground">No tasks yet</p>}
+              {(tasks as TaskWithUser[]).map(t => (
                 <li key={t.id} className="flex items-start gap-2 rounded p-1.5 hover:bg-muted/50">
                   <input
                     type="checkbox"
@@ -757,11 +806,11 @@ function LeadDetail() {
             </ul>
           </Card>
 
-          {(appointments as any[]).length > 0 && (
-            <Card className="p-5 shadow-card">
-              <h3 className="text-sm font-semibold">Appointments</h3>
-              <ul className="mt-2 space-y-2">
-                {(appointments as any[]).map(a => (
+          {(appointments as AppointmentWithUser[]).length > 0 && (
+            <Card className="p-4 shadow-card">
+              <h3 className="mb-2 text-sm font-semibold flex items-center gap-2"><Calendar className="h-4 w-4 text-info" /> Visits</h3>
+              <ul className="space-y-2">
+                {(appointments as AppointmentWithUser[]).map(a => (
                   <li key={a.id} className="rounded p-1.5 text-xs hover:bg-muted/50">
                     <p className="font-medium">{format(new Date(a.scheduled_at), "MMM d, h:mm a")}</p>
                     <p className="text-muted-foreground capitalize">{a.location} · {a.status}</p>
