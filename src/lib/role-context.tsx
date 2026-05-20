@@ -112,12 +112,7 @@ function dbLeadToMockLead(db: any): Lead {
       id: db.team.id,
       name: db.team.name,
     } : undefined,
-    assigned_user: db.assigned_user ? {
-      id: db.assigned_user.id,
-      full_name: db.assigned_user.name,
-      email: db.assigned_user.email,
-      avatar_url: db.assigned_user.avatar_color,
-    } : undefined,
+    assigned_user: undefined,
   };
 }
 
@@ -169,8 +164,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       let query = supabase.from("leads").select(`
         *,
         tenant:tenants(id, name, status),
-        team:teams(id, name),
-        assigned_user:profiles!assigned_to(id, name, email, avatar_color)
+        team:teams(id, name)
       `);
       
       // Use authRoles directly instead of orgRoleOf to ensure correct role detection
