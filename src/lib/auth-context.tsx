@@ -47,8 +47,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ prevents double-init loops (CRITICAL FIX)
-  const initialized = useRef(false);
   const stateUpdateCount = useRef(0);
 
   const loadProfile = async (uid: string, currentSession?: Session | null) => {
@@ -111,9 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
     let mounted = true;
     let authStateChangeCount = 0;
     let initialLoadDone = false;
