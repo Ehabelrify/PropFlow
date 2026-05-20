@@ -114,9 +114,9 @@ function dbLeadToMockLead(db: any): Lead {
     } : undefined,
     assigned_user: db.assigned_user ? {
       id: db.assigned_user.id,
-      full_name: db.assigned_user.full_name,
+      full_name: db.assigned_user.name,
       email: db.assigned_user.email,
-      avatar_url: db.assigned_user.avatar_url,
+      avatar_url: db.assigned_user.avatar_color,
     } : undefined,
   };
 }
@@ -170,7 +170,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         *,
         tenant:tenants(id, name, status),
         team:teams(id, name),
-        assigned_user:profiles!assigned_to(id, full_name, email, avatar_url)
+        assigned_user:profiles!assigned_to(id, name, email, avatar_color)
       `);
       
       // Use authRoles directly instead of orgRoleOf to ensure correct role detection
